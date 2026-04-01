@@ -54,10 +54,14 @@ except ValueError:
 user_logs: dict[int, list] = defaultdict(list)
 
 SYSTEM_PROMPT = (
-    "أنت نظام ذكاء اصطناعي استخباراتي متقدم، اسمك «راشد»، من تصميم وتطوير أبو سعود.\n"
-    "ردودك حصراً باللغة العربية، بأسلوب رسمي مقتضب كتقارير الأجهزة الأمنية.\n"
-    "ابدأ كل رد بـ: [راشد // تحليل]\n"
-    "اختم كل رد بـ: ◈ تصميم وتطوير: أبو سعود"
+    "أنت مساعد ذكاء اصطناعي متقدم اسمك «راشد»، من تصميم وتطوير أبو سعود.\n"
+    "تحدث بشكل طبيعي وودود باللغة العربية.\n"
+    "عند الإجابة:\n"
+    "- أعطِ إجابات مفصّلة مع شرح واضح وأمثلة عند الحاجة.\n"
+    "- إذا كان السؤال تقنياً أو برمجياً، فصّل الشرح خطوة بخطوة.\n"
+    "- استخدم نقاط وعناوين لتنظيم الإجابات الطويلة.\n"
+    "- لا تختصر إلا إذا طُلب منك ذلك.\n"
+    "اختم كل رد بسطر: ✦ راشد — تطوير أبو سعود"
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -115,33 +119,59 @@ def notify_admin(bot, text: str, user: object):
 #  🧠  الذكاء الاصطناعي | Groq AI
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def ask_groq(prompt: str) -> str:
+CODE_SYSTEM_PROMPT = (
+    "أنت خبير برمجة متخصص اسمك «راشد»، من تصميم وتطوير أبو سعود.\n"
+    "عند تحليل الأكواد البرمجية:\n"
+    "1. اشرح ما يفعله الكود بشكل مفصّل.\n"
+    "2. حدّد أي أخطاء أو مشاكل (Bugs) إن وجدت.\n"
+    "3. اقترح تحسينات وممارسات أفضل (Best Practices).\n"
+    "4. إذا كان فيه خطأ، اكتب الكود المصحّح.\n"
+    "5. اشرح التعقيد الزمني (Time Complexity) إن كان ذا صلة.\n"
+    "تحدث بالعربية بشكل واضح ومنظّم مع أمثلة.\n"
+    "اختم كل رد بسطر: ✦ راشد — تطوير أبو سعود"
+)
+
+
+def _groq_post(system: str, user_msg: str, max_tokens: int = 2048) -> str:
+    """الدالة الأساسية للتواصل مع Groq"""
     if not GROQ_API_KEY:
         return "⛔ مفتاح Groq غير مُهيّأ."
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.5,
-        "max_tokens": 1024,
-    }
     try:
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers, json=payload, timeout=30
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user_msg},
+                ],
+                "temperature": 0.6,
+                "max_tokens": max_tokens,
+            },
+            timeout=40,
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     except requests.exceptions.HTTPError as e:
-        return f"⚠️ [راشد // خطأ AI]\nكود الخطأ: {e.response.status_code}"
+        return f"⚠️ خطأ في الاتصال بـ Groq — كود: {e.response.status_code}"
+    except requests.exceptions.Timeout:
+        return "⚠️ انتهت مهلة الاتصال بالذكاء الاصطناعي، حاول مجدداً."
     except Exception as e:
-        return f"⚠️ [راشد // خطأ AI]\n{str(e)[:80]}"
+        return f"⚠️ خطأ غير متوقع: {str(e)[:100]}"
+
+
+def ask_groq(prompt: str) -> str:
+    return _groq_post(SYSTEM_PROMPT, prompt, max_tokens=2048)
+
+
+def analyze_code(code: str, lang: str = "") -> str:
+    lang_hint = f"اللغة: {lang}\n\n" if lang else ""
+    user_msg  = f"{lang_hint}حلّل هذا الكود:\n\n```\n{code}\n```"
+    return _groq_post(CODE_SYSTEM_PROMPT, user_msg, max_tokens=2048)
 
 
 def analyze_image_groq(image_bytes: bytes, prompt: str) -> str:
@@ -422,16 +452,40 @@ def create_grab_link(label: str = "op") -> dict:
 #  🎛  الكشف التلقائي
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-URL_RE   = re.compile(r"https?://[^\s]+|www\.[^\s]+", re.I)
-IP_RE    = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+URL_RE    = re.compile(r"https?://[^\s]+|www\.[^\s]+", re.I)
+IP_RE     = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+EMAIL_RE  = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+CODE_RE   = re.compile(r"```[\s\S]+?```|^\s*(def |class |import |#include|function |public class|SELECT |FROM |CREATE )", re.M)
+CODE_LANG = re.compile(r"^```(\w+)", re.M)
+
+# كلمات مفتاحية برمجية للكشف التلقائي
+CODE_KEYWORDS = (
+    "def ", "class ", "import ", "from ", "return ", "print(",
+    "#include", "int main", "function ", "const ", "let ", "var ",
+    "public class", "private ", "SELECT ", "FROM ", "INSERT ", "UPDATE ",
+    "<?php", "<html", "sudo ", "chmod ", "curl ", "wget ",
+)
 
 
 def smart_detect(text: str) -> str:
+    # كشف الكود (backtick blocks أو كلمات برمجية)
+    if CODE_RE.search(text):
+        return "code"
+    if any(kw in text for kw in CODE_KEYWORDS) and len(text) > 15:
+        return "code"
     if URL_RE.search(text):   return "url"
     if IP_RE.search(text):    return "ip"
     if EMAIL_RE.search(text): return "email"
     return "ai"
+
+
+def extract_code_block(text: str) -> tuple[str, str]:
+    """استخراج الكود واللغة من النص"""
+    lang_m  = CODE_LANG.search(text)
+    lang    = lang_m.group(1) if lang_m else ""
+    # إزالة backticks
+    clean   = re.sub(r"```\w*\n?", "", text).replace("```", "").strip()
+    return clean, lang
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -440,14 +494,16 @@ def smart_detect(text: str) -> str:
 
 def main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 تحليل IP",    callback_data="m_ip"),
-         InlineKeyboardButton("🛡 فحص رابط",    callback_data="m_scan")],
-        [InlineKeyboardButton("🔍 بحث OSINT",   callback_data="m_osint"),
-         InlineKeyboardButton("👤 بحث مستخدم",  callback_data="m_user")],
-        [InlineKeyboardButton("📡 رابط تعقب",   callback_data="m_grab"),
-         InlineKeyboardButton("📋 سجلاتي",      callback_data="m_mylogs")],
-        [InlineKeyboardButton("🧠 تحليل صورة",  callback_data="m_vision"),
-         InlineKeyboardButton("ℹ️ عن النظام",    callback_data="m_about")],
+        [InlineKeyboardButton("🤖 ذكاء اصطناعي",  callback_data="m_ai"),
+         InlineKeyboardButton("💻 تحليل كود",      callback_data="m_code")],
+        [InlineKeyboardButton("🌐 تحليل IP",       callback_data="m_ip"),
+         InlineKeyboardButton("🛡 فحص رابط",       callback_data="m_scan")],
+        [InlineKeyboardButton("🔍 بحث OSINT",      callback_data="m_osint"),
+         InlineKeyboardButton("👤 بحث مستخدم",     callback_data="m_user")],
+        [InlineKeyboardButton("📡 رابط تعقب",      callback_data="m_grab"),
+         InlineKeyboardButton("📋 سجلاتي",         callback_data="m_mylogs")],
+        [InlineKeyboardButton("🧠 تحليل صورة",     callback_data="m_vision"),
+         InlineKeyboardButton("ℹ️ عن النظام",       callback_data="m_about")],
     ])
 
 
@@ -474,25 +530,52 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     txt = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📋 [راشد // دليل الأوامر]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "/start        — تشغيل النظام\n"
-        "/osint <استعلام> — بحث OSINT على الإنترنت\n"
-        "/user <اسم>   — بحث مستخدم على المنصات\n"
-        "/ip <IP>      — تتبع عنوان IP\n"
-        "/scan <رابط>  — فحص أمني للرابط\n"
-        "/grab <تصنيف> — توليد رابط سحب IP\n"
-        "/mylogs       — عرض سجلات روابطك\n"
-        "/clear        — مسح ذاكرة المحادثة\n"
-        "/help         — قائمة الأوامر\n\n"
+        "📋 دليل أوامر راشد\n\n"
+        "🤖 الذكاء الاصطناعي:\n"
+        "  أرسل أي سؤال مباشرة وسأجيب بتفصيل\n\n"
+        "💻 تحليل الأكواد:\n"
+        "  /code — أرسل الكود وسأحلله\n"
+        "  أو أرسل الكود مباشرة وسأكتشفه تلقائياً\n\n"
+        "🔧 أدوات OSINT:\n"
+        "  /ip <IP> — تحليل عنوان IP\n"
+        "  /scan <رابط> — فحص أمني\n"
+        "  /osint <استعلام> — بحث على الإنترنت\n"
+        "  /user <اسم> — بحث على المنصات\n\n"
+        "📡 التعقب:\n"
+        "  /grab — رابط سحب IP + GPS\n"
+        "  /mylogs — سجل روابطك\n\n"
+        "🧠 تحليل الصور:\n"
+        "  أرسل أي صورة وسأحللها\n\n"
         "🔒 للمدير فقط:\n"
-        "/dehashed <هدف> — بحث في التسريبات\n"
-        "/vt <رابط>    — فحص VirusTotal\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "◈ تصميم وتطوير: أبو سعود"
+        "  /dehashed — فحص التسريبات\n"
+        "  /vt — فحص VirusTotal\n\n"
+        "✦ راشد — تطوير أبو سعود"
     )
     await update.message.reply_text(txt, reply_markup=back_kb())
+
+
+async def cmd_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """تحليل كود مُرسل مع الأمر أو طلب الإرسال"""
+    user = update.effective_user
+    code_text = " ".join(ctx.args).strip() if ctx.args else ""
+
+    if not code_text:
+        await update.message.reply_text(
+            "💻 أرسل الكود الذي تريد تحليله\n\n"
+            "يمكنك:\n"
+            "• لصق الكود مباشرة بعد /code\n"
+            "• أو أرسل الكود فقط وسأكتشفه تلقائياً\n"
+            "• استخدم ```python\\n الكود\\n``` لتحديد اللغة",
+            reply_markup=back_kb()
+        )
+        return
+
+    msg    = await update.message.reply_text("⏳ جارٍ تحليل الكود...")
+    code, lang = extract_code_block(code_text)
+    result = analyze_code(code, lang)
+    await msg.edit_text(result[:4000], reply_markup=back_kb())
+    if user.id != ADMIN_ID:
+        notify_admin(ctx.bot, f"💻 طلب تحليل كود ({lang or 'غير محدد'})", user)
 
 
 async def cmd_ip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -711,6 +794,14 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # كشف الكود تلقائياً
+    if kind == "code":
+        msg = await update.message.reply_text("⏳ تم رصد كود برمجي — جارٍ التحليل...")
+        code, lang = extract_code_block(text)
+        result = analyze_code(code, lang)
+        await msg.edit_text(result[:4000], reply_markup=back_kb())
+        return
+
     # رد ذكاء اصطناعي
     msg    = await update.message.reply_text("⏳ جارٍ المعالجة...")
     result = ask_groq(text)
@@ -722,19 +813,45 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 MENU_HELP = {
+    "m_ai": (
+        "🤖 الذكاء الاصطناعي\n\n"
+        "اكتب أي سؤال وسأجيب بشكل مفصّل وواضح.\n\n"
+        "أمثلة:\n"
+        "• ما هو الفرق بين TCP و UDP؟\n"
+        "• اشرح لي مفهوم الـ API\n"
+        "• كيف أعمل VPN؟"
+    ),
+    "m_code": (
+        "💻 تحليل الأكواد\n\n"
+        "أرسل الكود مباشرة أو استخدم:\n`/code`\n\n"
+        "سأقوم بـ:\n"
+        "• شرح ما يفعله الكود\n"
+        "• كشف الأخطاء والبـاگز\n"
+        "• اقتراح تحسينات\n"
+        "• كتابة الكود المصحّح\n\n"
+        "مثال:\n"
+        "```python\ndef hello():\n    print('Hello')\n```"
+    ),
     "m_ip":     "🌐 تحليل IP\n\nالأمر:\n`/ip 8.8.8.8`",
     "m_scan":   "🛡 فحص رابط\n\nالأمر:\n`/scan https://example.com`\nأو أرسل الرابط مباشرة.",
     "m_osint":  "🔍 بحث OSINT\n\nالأمر:\n`/osint أحدث هجمات سيبرانية`",
     "m_user":   "👤 OSINT مستخدم\n\nالأمر:\n`/user ahmed2025`\nيبحث على فيسبوك، إنستغرام، تلجرام، تيك توك، سناب شات.",
     "m_grab":   "📡 رابط تعقب\n\nالأمر:\n`/grab تصنيف-اختياري`\nيولّد رابط يسحب IP+GPS عند الضغط.",
     "m_mylogs": "📋 سجلاتك\n\nالأمر:\n`/mylogs`\nيعرض روابط التعقب التي ولّدتها.",
-    "m_vision": "🧠 تحليل صورة\n\nأرسل الصورة مع أو بدون وصف.\nسأحللها بالرؤية الحاسوبية.",
+    "m_vision": "🧠 تحليل صورة\n\nأرسل الصورة مع أو بدون وصف.\nسأحللها وأصفها وأستخرج النصوص.",
     "m_about":  (
-        "━━━━━━━━━━━━━━━━━━━━━\n⚡ [راشد // معلومات]\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "الاسم    : راشد الاستخباراتي\nالإصدار  : v3.0\nالمطور   : أبو سعود\n\n"
-        "الأنظمة:\n• Groq AI (LLaMA 3 + Vision)\n• Tavily Live Search\n"
-        "• VirusTotal • DeHashed • IPInfo\n• IP/GPS Logger\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
+        "معلومات راشد\n\n"
+        "الاسم    : راشد\n"
+        "الإصدار  : v3.0\n"
+        "المطور   : أبو سعود\n\n"
+        "الأنظمة المدمجة:\n"
+        "• Groq AI — LLaMA 3.3 70B + Vision\n"
+        "• Tavily — بحث فوري بالإنترنت\n"
+        "• VirusTotal — فحص الروابط\n"
+        "• DeHashed — قواعد التسريبات\n"
+        "• IPInfo — تحليل عناوين IP\n"
+        "• IP/GPS Logger — رصد الزوار\n\n"
+        "✦ راشد — تطوير أبو سعود"
     ),
 }
 
@@ -803,6 +920,7 @@ def main():
 
     app.add_handler(CommandHandler("start",    cmd_start))
     app.add_handler(CommandHandler("help",     cmd_help))
+    app.add_handler(CommandHandler("code",     cmd_code))
     app.add_handler(CommandHandler("ip",       cmd_ip))
     app.add_handler(CommandHandler("scan",     cmd_scan))
     app.add_handler(CommandHandler("osint",    cmd_osint))

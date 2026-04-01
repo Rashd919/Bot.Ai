@@ -11,3 +11,8 @@ build/
 dist/
 *.egg-info/
 .DS_Store
+.replit
+replit.nix
+.local/
+.config/
+*.log

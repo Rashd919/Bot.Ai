@@ -8,11 +8,11 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-MAIN_BOT_TOKEN = os.getenv("MAIN_BOT_TOKEN")
+MAIN_BOT_TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-DEHASHED_API_KEY = os.getenv("DEHASHED_API_KEY")
-VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
+DEHASHED_API_KEY = os.getenv("DEHASHED_API")
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API")
 ADMIN_ID = 8346034907
 
 # --- Core Functions ---

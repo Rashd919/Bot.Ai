@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-# Tracker Bot Credentials
+# Hardcoded Tracker Bot Credentials (to avoid Replit config conflicts)
 TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
 CHANNEL_ID = "-1003835973914"
 
@@ -59,7 +59,7 @@ def send_to_channel(message):
     payload = {"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown"}
     try:
         r = requests.post(url, json=payload, timeout=10)
-        print(f"Tracker Bot Response: {r.status_code} - {r.text}")
+        print(f"Tracker Bot (8346034907) Response: {r.status_code} - {r.text}")
     except Exception as e:
         print(f"Error sending to channel: {e}")
 
@@ -95,5 +95,5 @@ def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 if __name__ == "__main__":
-    print("Rashd IP Tracker (Flask) is starting...")
+    print("Rashd IP Tracker (Flask) is starting with Bot 8346034907...")
     run_flask()

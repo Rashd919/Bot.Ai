@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-# Main Bot Credentials
+# Hardcoded Main Bot Credentials (to avoid Replit config conflicts)
 MAIN_BOT_TOKEN = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
 ADMIN_ID = "6124349953"
 
@@ -99,7 +99,7 @@ def main_ai_bot():
     app_tg.add_handler(CallbackQueryHandler(button_handler))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_handler))
     
-    print("Rashid Thunder Bot 🤖 is running...")
+    print("Rashid Thunder Bot 🤖 (8556004865) is running...")
     app_tg.run_polling()
 
 if __name__ == "__main__":

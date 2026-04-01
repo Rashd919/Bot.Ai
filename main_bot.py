@@ -123,7 +123,7 @@ def ask_groq(prompt: str) -> str:
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "llama3-70b-8192",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
@@ -671,8 +671,12 @@ async def handle_image(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
     user = update.effective_user
     text = update.message.text.strip()
+    if not text:
+        return
     kind = smart_detect(text)
 
     if user.id != ADMIN_ID:
@@ -772,9 +776,28 @@ async def handle_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 #  🚀  تشغيل البوت
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def clear_webhook():
+    """مسح أي webhook أو session قديم قبل البدء"""
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/deleteWebhook",
+            json={"drop_pending_updates": True},
+            timeout=10,
+        )
+        requests.post(
+            f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/close",
+            timeout=8,
+        )
+        time.sleep(2)
+    except Exception:
+        pass
+
+
 def main():
     if not MAIN_BOT_TOKEN:
         raise RuntimeError("MAIN_BOT_TOKEN غير موجود!")
+
+    clear_webhook()
 
     app = Application.builder().token(MAIN_BOT_TOKEN).build()
 

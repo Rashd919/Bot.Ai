@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_T")
+TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
 IPINFO_TOKEN = os.getenv("IPINFO_TOKEN")
 CHANNEL_ID = "-1003835973914"
 

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # --- Load environment variables ---
 load_dotenv()
 
-MAIN_BOT_TOKEN = os.getenv("TOKEN")
+MAIN_BOT_TOKEN = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 DEHASHED_API_KEY = os.getenv("DEHASHED_API")

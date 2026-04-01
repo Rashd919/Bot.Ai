@@ -21,6 +21,7 @@ VIRUSTOTAL_KEY = "a01dfe3aaeda3f8adc14e5dbbaab722e8eee83dcb1dabe8d09f5a750b85ecd
 DEHASHED_KEY = "5gOm19iuiR4QhqyXgjQOOS8wbHgTxDbx6Twjo9Xsmr/72feQZlV7X0E="
 TARGET_CHANNEL_ID = "-1003770774871"
 BOT_SERVER_URL = "e5a61d09-4e57-435e-b8f5-97eb63bb1176-00-visgznorpj9d.pike.replit.dev"
+ADMIN_ID = "6124349953"
 
 [workflows]
 runButton = "Project"
@@ -49,3 +50,6 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[agent]
+expertMode = true

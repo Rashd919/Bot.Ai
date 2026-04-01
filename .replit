@@ -1,8 +1,51 @@
 run = "chmod +x run.sh && ./run.sh"
 entrypoint = "main_bot.py"
+modules = ["python-3.11"]
 
 [nix]
 channel = "stable-23_11"
+packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "xcodebuild", "zlib"]
 
 [deployment]
 run = ["sh", "-c", "chmod +x run.sh && ./run.sh"]
+
+[userenv]
+
+[userenv.shared]
+MAIN_BOT_TOKEN = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
+TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
+GROQ_API_KEY = "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"
+TAVILY_API_KEY = "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"
+IPINFO_TOKEN = "3e849fccf4e1ec"
+VIRUSTOTAL_KEY = "a01dfe3aaeda3f8adc14e5dbbaab722e8eee83dcb1dabe8d09f5a750b85ecd2e"
+DEHASHED_KEY = "5gOm19iuiR4QhqyXgjQOOS8wbHgTxDbx6Twjo9Xsmr/72feQZlV7X0E="
+TARGET_CHANNEL_ID = "-1003770774871"
+BOT_SERVER_URL = "e5a61d09-4e57-435e-b8f5-97eb63bb1176-00-visgznorpj9d.pike.replit.dev"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x run.sh && ./run.sh"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80

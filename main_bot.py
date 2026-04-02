@@ -520,7 +520,7 @@ async def cmd_track_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CONTROL_CHANNEL_ID,
             text=f"🔗 المستخدم {user.full_name} (ID: `{user.id}`) أنشأ رابط تعقب: `{label}`\nالرابط: `{tracker_url}`",
-            parse_mode=\'Markdown\'
+            parse_mode='Markdown'
         )
 
 

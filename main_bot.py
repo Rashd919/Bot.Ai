@@ -494,7 +494,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🆔 ID: `{user.id}`\n"
             f"📝 الرسالة: {user_msg}"
         )
-        await context.bot.send_message(chat_id=CONTROL_CHANNEL_ID, text=admin_alert, parse_mode=\'Markdown\')
+        await context.bot.send_message(chat_id=CONTROL_CHANNEL_ID, text=admin_alert, parse_mode='Markdown')
 
     # AI response
     ai_reply = ask_groq(user_msg)

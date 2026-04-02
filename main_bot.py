@@ -524,23 +524,20 @@ async def cmd_track_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🚀  تشغيل البوت | Bot Startup
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀 تشغيل البوت | Bot Startup
 
-def main_ai_bot():
-    app_tg = Application.builder().token(MAIN_BOT_TOKEN).build()
-    
-    app_tg.add_handler(CommandHandler("start", start))
-    app_tg.add_handler(CallbackQueryHandler(button_handler))
-    app_tg.add_handler(CommandHandler("track_link", cmd_track_link))
-    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
+# تأكد أن هذه الأسطر تبدأ من أول العمود يساراً (بدون مسافات)
+app_tg = Application.builder().token(MAIN_BOT_TOKEN).build()
+
+app_tg.add_handler(CommandHandler("start", start))
+app_tg.add_handler(CallbackQueryHandler(button_handler))
+app_tg.add_handler(CommandHandler("track_link", cmd_track_link))
+app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
 from flask import Flask
 import threading
 import os
 
-# 1. إعداد خادم Flask
 app = Flask(__name__)
 
 @app.route('/')
@@ -548,17 +545,13 @@ def home():
     return "Bot is running"
 
 def run_web():
-    # Render يمرر المنفذ عبر متغير البيئة PORT
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# 2. تشغيل خادم الويب في الخلفية (Thread) قبل تشغيل البوت
+# تشغيل خادم الويب في الخلفية
 threading.Thread(target=run_web, daemon=True).start()
 
-# 3. نقطة انطلاق البرنامج الأساسية
 if __name__ == "__main__":
-    print(f"⚡ راشد الاستخباراتي (البوت الأساسي {MAIN_BOT_TOKEN.split(':')[0]}) يعمل...")
-    
-    # تشغيل البوت (هذا السطر يجب أن يكون الأخير لأنه يوقف تنفيذ ما بعده)
+    print(f"⚡ راشد الاستخباراتي يعمل الآن...")
+    # هذا السطر يجب أن يكون الأخير دائماً
     app_tg.run_polling()
-

@@ -377,14 +377,21 @@ def scan_url(url_to_scan: str) -> str:
                 total= mal + sus + harm + undet
                 verdict = "🔴 خطر" if mal > 0 else ("🟡 مريب" if sus > 0 else "🟢 آمن")
 
-                report  = "━━━━━━━━━━━━━━━━━━━━━\n🛡 [راشد // تقرير أمني]\n━━━━━━━━━━━━━━━━━━━━━\n"
-                url_disp = (url_to_scan[:55] + "...") if len(url_to_scan) > 58 else url_to_scan
-                report += f"🔗 الرابط  : {url_disp}\n"
-                report += f"⚖️ الحكم   : {verdict}\n"
-                report += f"🔴 خطر     : {mal}/{total}\n"
-                report += f"🟡 مريب    : {sus}/{total}\n"
-                report += f"🟢 نظيف    : {harm}/{total}\n"
-                report += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
+                url_disp = (url_to_scan[:50] + "…") if len(url_to_scan) > 53 else url_to_scan
+                pct_clean = int((harm / total) * 100) if total else 0
+                bar_fill  = "█" * (pct_clean // 10) + "░" * (10 - pct_clean // 10)
+
+                report  = f"🛡️ نتيجة فحص الرابط\n\n"
+                report += f"🔗 {url_disp}\n\n"
+                report += f"الحكم النهائي: {verdict}\n\n"
+                report += f"─────── التفاصيل ───────\n"
+                report += f"🔴 خطر      : {mal}\n"
+                report += f"🟡 مريب     : {sus}\n"
+                report += f"🟢 نظيف     : {harm}\n"
+                report += f"⬜ غير محدد : {undet}\n"
+                report += f"📊 من أصل   : {total} محرك فحص\n\n"
+                report += f"نسبة الأمان: [{bar_fill}] {pct_clean}%\n\n"
+                report += "✦ راشد — تطوير أبو سعود"
                 return report
 
         return "⚠️ لم يكتمل الفحص في الوقت المحدد."
@@ -399,40 +406,55 @@ def scan_url(url_to_scan: str) -> str:
 def check_breach(target: str) -> str:
     if not DEHASHED_KEY:
         return "⛔ مفتاح DeHashed غير مُهيّأ."
-    qtype = "email" if "@" in target else "phone"
-    try:
-        r = requests.get(
-            "https://api.dehashed.com/search",
-            headers={"Authorization": f"Basic {DEHASHED_KEY}", "Content-Type": "application/json"},
-            params={"query": f'{qtype}:"{target}"', "size": 10},
-            timeout=20,
-        )
-        r.raise_for_status()
-        data    = r.json()
-        total   = data.get("total", 0)
-        entries = data.get("entries", [])
 
-        report  = "━━━━━━━━━━━━━━━━━━━━━\n🔓 [راشد // تقرير تسريب]\n━━━━━━━━━━━━━━━━━━━━━\n"
-        report += f"🎯 الهدف: {target}\n"
-        if total == 0:
-            report += "✅ لا توجد سجلات في قواعد التسريبات.\n"
-        else:
-            report += f"⚠️ عدد السجلات: {total}\n"
-            for i, e in enumerate(entries[:5], 1):
-                report += f"\n[#{i}]\n"
-                for key, label in [("email","📧"),("username","👤"),("password","🔑"),("database_name","🗂"),("ip_address","🌐")]:
-                    if e.get(key):
-                        report += f"  {label} {e[key]}\n"
-            if total > 5:
-                report += f"\n... و{total-5} سجل إضافي.\n"
-        report += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
-        return report
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401:
-            return "⛔ مفتاح DeHashed غير صالح."
-        return f"⚠️ [راشد // خطأ]\nكود: {e.response.status_code}"
-    except Exception as e:
-        return f"⚠️ [راشد // خطأ]\n{str(e)[:80]}"
+    # محاولة v2 أولاً ثم v1
+    endpoints = [
+        ("https://api.dehashed.com/v2/search", {"Authorization": f"Bearer {DEHASHED_KEY}"}),
+        ("https://api.dehashed.com/search",    {"Authorization": f"Basic {DEHASHED_KEY}", "Content-Type": "application/json"}),
+    ]
+    qtype = "email" if "@" in target else "username"
+
+    for url, headers in endpoints:
+        try:
+            r = requests.get(
+                url,
+                headers=headers,
+                params={"query": f'{qtype}:"{target}"', "size": 10},
+                timeout=20,
+            )
+            if r.status_code == 404:
+                continue
+            r.raise_for_status()
+            data    = r.json()
+            total   = data.get("total", 0)
+            entries = data.get("entries") or data.get("data", [])
+
+            report  = f"🔓 نتيجة فحص التسريبات\n\n"
+            report += f"🎯 الهدف : {target}\n"
+            report += f"🗂 المصدر : DeHashed\n\n"
+            if total == 0:
+                report += "✅ لا توجد سجلات مسرّبة لهذا الهدف.\n"
+            else:
+                report += f"⚠️ وُجد {total} سجل مسرّب!\n\n"
+                report += "─────── أبرز النتائج ───────\n"
+                for i, e in enumerate(entries[:5], 1):
+                    report += f"\n[{i}]\n"
+                    for key, label in [("email","📧 إيميل"),("username","👤 مستخدم"),("password","🔑 كلمة مرور"),("database_name","🗂 قاعدة البيانات"),("ip_address","🌐 IP")]:
+                        if e.get(key):
+                            report += f"  {label} : {e[key]}\n"
+                if total > 5:
+                    report += f"\n… و {total - 5} سجل إضافي.\n"
+            report += "\n✦ راشد — تطوير أبو سعود"
+            return report
+        except requests.exceptions.HTTPError as e:
+            code = e.response.status_code
+            if code in (401, 403):
+                return "⛔ مفتاح DeHashed غير صالح أو منتهي الصلاحية."
+            continue
+        except Exception:
+            continue
+
+    return "⚠️ تعذّر الوصول إلى DeHashed. تحقق من المفتاح أو أعد المحاولة لاحقاً."
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -638,13 +660,7 @@ async def cmd_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result = osint_username(username)
     await msg.edit_text(result[:4000], reply_markup=back_kb())
     if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"📌 OSINT مستخدم: @{username}", user)
-    # إرسال للقناة عبر بوت التعقب
-    send_to_channel(
-        f"🕵 [راشد // OSINT مستخدم]\n"
-        f"👤 {user.full_name} (@{user.username or 'N/A'})\n"
-        f"🎯 البحث عن: @{username.lstrip('@')}"
-    )
+        notify_admin(ctx.bot, f"🔍 بحث OSINT عن المستخدم: @{username.lstrip('@')}", user)
 
 
 async def cmd_grab(update: Update, ctx: ContextTypes.DEFAULT_TYPE):

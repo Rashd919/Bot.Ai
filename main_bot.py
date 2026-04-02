@@ -536,7 +536,7 @@ def main_ai_bot():
     app_tg.add_handler(CommandHandler("track_link", cmd_track_link))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-     from flask import Flask
+from flask import Flask
 import threading
 import os
 

@@ -536,16 +536,11 @@ def main_ai_bot():
     app_tg.add_handler(CommandHandler("track_link", cmd_track_link))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    print(f"⚡ راشد الاستخباراتي (البوت الأساسي {MAIN_BOT_TOKEN.split(":")[0]}) يعمل...")
-    app_tg.run_polling()
-
-if __name__ == "__main__":
-    main_ai_bot()
-
-from flask import Flask
+     from flask import Flask
 import threading
 import os
 
+# 1. إعداد خادم Flask
 app = Flask(__name__)
 
 @app.route('/')
@@ -553,8 +548,17 @@ def home():
     return "Bot is running"
 
 def run_web():
+    # Render يمرر المنفذ عبر متغير البيئة PORT
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# تشغيل السيرفر بخيط منفصل
-threading.Thread(target=run_web).start()
+# 2. تشغيل خادم الويب في الخلفية (Thread) قبل تشغيل البوت
+threading.Thread(target=run_web, daemon=True).start()
+
+# 3. نقطة انطلاق البرنامج الأساسية
+if __name__ == "__main__":
+    print(f"⚡ راشد الاستخباراتي (البوت الأساسي {MAIN_BOT_TOKEN.split(':')[0]}) يعمل...")
+    
+    # تشغيل البوت (هذا السطر يجب أن يكون الأخير لأنه يوقف تنفيذ ما بعده)
+    app_tg.run_polling()
+

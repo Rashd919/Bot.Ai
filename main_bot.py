@@ -446,11 +446,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     keyboard = [
-        [InlineKeyboardButton("🔍 فحص أمني", callback_data='scan_info\'),
-         InlineKeyboardButton("🌐 بحث OSINT", callback_data='osint_info\')],
-        [InlineKeyboardButton("💻 مساعدة برمجية", callback_data='code_info\'),
-         InlineKeyboardButton("🔗 رابط تعقب", callback_data='tracker_info\')],
-        [InlineKeyboardButton("🤖 عن البوت", callback_data='about_info\')]
+        [InlineKeyboardButton("🔍 فحص أمني", callback_data='scan_info'),
+         InlineKeyboardButton("🌐 بحث OSINT", callback_data='osint_info')],
+        [InlineKeyboardButton("💻 مساعدة برمجية", callback_data='code_info'),
+         InlineKeyboardButton("🔗 رابط تعقب", callback_data='tracker_info')],
+        [InlineKeyboardButton("🤖 عن البوت", callback_data='about_info')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = f"أهلاً بك {user_name} في **راشد الاستخباراتي 🤖**، من تصميم وتطوير أبو سعود.\nاختر أداة من الأسفل أو أرسل استفسارك."
@@ -463,11 +463,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     responses = {
-        'scan_info\': "استخدم الأمر /scan متبوعاً برابط أو IP للفحص الأمني.",
-        'osint_info\': "استخدم الأمر /osint متبوعاً باسم أو موضوع للبحث الاستخباراتي.",
-        'code_info\': "أرسل أي كود برمجي لتحليله.",
-        'tracker_info\': "استخدم الأمر /track_link متبوعاً بتسمية للرابط (مثال: /track_link MyWebsite).",
-        'about_info\': "راشد الاستخباراتي 🤖 هو مساعد ذكاء اصطناعي متقدم، من تصميم وتطوير أبو سعود."
+        'scan_info': "استخدم الأمر /scan متبوعاً برابط أو IP للفحص الأمني.",
+        'osint_info': "استخدم الأمر /osint متبوعاً باسم أو موضوع للبحث الاستخباراتي.",
+        'code_info': "أرسل أي كود برمجي لتحليله.",
+        'tracker_info': "استخدم الأمر /track_link متبوعاً بتسمية للرابط (مثال: /track_link MyWebsite).",
+        'about_info': "راشد الاستخباراتي 🤖 هو مساعد ذكاء اصطناعي متقدم، من تصميم وتطوير أبو سعود."
     }
     
     response_text = responses.get(query.data, "⚠️ أمر غير معروف.")
@@ -478,7 +478,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CONTROL_CHANNEL_ID,
             text=f"🔘 المستخدم {user.full_name} (ID: `{user.id}`) ضغط على زر: {query.data}",
-            parse_mode=\'Markdown\'
+            parse_mode='Markdown'
         )
 
 

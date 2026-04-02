@@ -13,6 +13,7 @@ deploymentTarget = "vm"
 [userenv]
 
 [userenv.shared]
+CONTROL_CHANNEL_ID = "-1003751955886"
 MAIN_BOT_TOKEN = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
 TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
 GROQ_API_KEY = "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"

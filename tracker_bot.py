@@ -14,6 +14,7 @@ from flask import Flask, request, render_template_string, jsonify
 
 TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN") or "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
 TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID") or "-1003770774871"
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID") or "-1003751955886"
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
 
 app = Flask(__name__)

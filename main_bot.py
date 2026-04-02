@@ -496,16 +496,16 @@ def extract_code_block(text: str) -> tuple[str, str]:
 
 def main_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🤖 ذكاء اصطناعي",  callback_data="m_ai"),
-         InlineKeyboardButton("💻 تحليل كود",      callback_data="m_code")],
-        [InlineKeyboardButton("🌐 تحليل IP",       callback_data="m_ip"),
-         InlineKeyboardButton("🛡 فحص رابط",       callback_data="m_scan")],
-        [InlineKeyboardButton("🔍 بحث OSINT",      callback_data="m_osint"),
-         InlineKeyboardButton("👤 بحث مستخدم",     callback_data="m_user")],
-        [InlineKeyboardButton("📡 رابط تعقب",      callback_data="m_grab"),
-         InlineKeyboardButton("📋 سجلاتي",         callback_data="m_mylogs")],
-        [InlineKeyboardButton("🧠 تحليل صورة",     callback_data="m_vision"),
-         InlineKeyboardButton("ℹ️ عن النظام",       callback_data="m_about")],
+        [InlineKeyboardButton("🤖  ذكاء اصطناعي",   callback_data="m_ai"),
+         InlineKeyboardButton("💻  تحليل كود",       callback_data="m_code")],
+        [InlineKeyboardButton("🌐  تحليل IP",        callback_data="m_ip"),
+         InlineKeyboardButton("🛡️  فحص رابط",        callback_data="m_scan")],
+        [InlineKeyboardButton("🔍  بحث OSINT",       callback_data="m_osint"),
+         InlineKeyboardButton("👤  بحث مستخدم",      callback_data="m_user")],
+        [InlineKeyboardButton("📡  رابط تعقب",       callback_data="m_grab"),
+         InlineKeyboardButton("📋  سجلاتي",          callback_data="m_mylogs")],
+        [InlineKeyboardButton("🧠  تحليل صورة",      callback_data="m_vision"),
+         InlineKeyboardButton("⚙️  عن راشد",         callback_data="m_about")],
     ])
 
 
@@ -518,16 +518,19 @@ def back_kb() -> InlineKeyboardMarkup:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_user.first_name or "العميل"
-    await update.message.reply_text(
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ [راشد // تهيئة النظام]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"مرحباً، {name}.\nاختر الأداة المطلوبة:\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "◈ تصميم وتطوير: أبو سعود",
-        reply_markup=main_kb(),
+    name = update.effective_user.first_name or "صديقي"
+    txt = (
+        f"أهلاً {name} 👋\n\n"
+        "أنا *راشد* — مساعدك الذكي في عالم\n"
+        "الأمن السيبراني والاستخبارات والبرمجة.\n\n"
+        "✦ ذكاء اصطناعي متقدم\n"
+        "✦ تحليل الأكواد واكتشاف الأخطاء\n"
+        "✦ بحث OSINT وكشف المعلومات\n"
+        "✦ فحص الروابط وعناوين IP\n"
+        "✦ تتبع الأجهزة وسحب البيانات\n\n"
+        "اختر من القائمة 👇"
     )
+    await update.message.reply_text(txt, reply_markup=main_kb(), parse_mode="Markdown")
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):

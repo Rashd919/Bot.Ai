@@ -82,7 +82,7 @@ def send_to_channel(message: str):
             json={
                 "chat_id": TARGET_CHANNEL_ID,
                 "text": message,
-                "parse_mode":parse_mode,
+                "parse_mode": "Markdown",
                 "disable_web_page_preview": True,
             },
             timeout=10,
@@ -441,7 +441,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=CONTROL_CHANNEL_ID,
             text=f"🆕 مستخدم جديد بدأ البوت: {user.full_name} (ID: `{user.id}`)",
-            parse_mode=\'Markdown\'
+            parse_mode='Markdown'
+
         )
 
     keyboard = [

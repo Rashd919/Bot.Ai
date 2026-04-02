@@ -12,6 +12,8 @@ import json
 import requests
 from datetime import datetime
 from collections import defaultdict
+from threading import Thread
+from flask import Flask as _Flask
 
 from telegram import (
     Update,
@@ -910,10 +912,37 @@ def clear_webhook():
         pass
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🌐  خادم Keep-Alive (UptimeRobot)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+_keep_alive_app = _Flask("keep_alive")
+
+
+@_keep_alive_app.route("/")
+def _home():
+    return "راشد — شغّال ✅", 200
+
+
+@_keep_alive_app.route("/ping")
+def _ping():
+    return "pong", 200
+
+
+def keep_alive():
+    t = Thread(
+        target=lambda: _keep_alive_app.run(host="0.0.0.0", port=8080),
+        daemon=True,
+    )
+    t.start()
+    print("[Keep-Alive] خادم UptimeRobot جاهز على المنفذ 8080")
+
+
 def main():
     if not MAIN_BOT_TOKEN:
         raise RuntimeError("MAIN_BOT_TOKEN غير موجود!")
 
+    keep_alive()
     clear_webhook()
 
     app = Application.builder().token(MAIN_BOT_TOKEN).build()

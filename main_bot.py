@@ -33,10 +33,10 @@ from telegram.ext import (
 #  ⚙️  إعدادات النظام
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MAIN_BOT_TOKEN    = os.getenv("MAIN_BOT_TOKEN", "")
-TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN", "")
-TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "-1003770774871")
-CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "-1003751955886")
+MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",     "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0")
+TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN",  "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
+TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID")  or "-1003770774871"
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID") or "-1003751955886"
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
 TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY", "")
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
@@ -92,11 +92,12 @@ def send_to_channel(message: str):
 
 def notify_admin(bot, text: str, user: object):
     """إرسال نشاط المستخدم إلى قناة المراقبة (Rashd-Ai Control Center)"""
+    uname = f"@{user.username}" if user.username else "N/A"
     msg = (
-        "👁 *راشد — نشاط مستخدم*\n\n"
+        f"👁 راشد — نشاط مستخدم\n\n"
         f"👤 الاسم    : {user.full_name}\n"
-        f"🆔 ID       : `{user.id}`\n"
-        f"📛 معرف     : @{user.username or 'N/A'}\n"
+        f"🆔 ID       : {user.id}\n"
+        f"📛 معرف     : {uname}\n"
         f"🕐 التوقيت  : {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n"
         f"{text}\n\n"
         "✦ راشد — تطوير أبو سعود"
@@ -107,7 +108,7 @@ def notify_admin(bot, text: str, user: object):
             json={
                 "chat_id": CONTROL_CHANNEL_ID,
                 "text": msg[:4000],
-                "parse_mode": "Markdown",
+                "parse_mode": None,
                 "disable_web_page_preview": True,
             },
             timeout=8,
@@ -899,19 +900,23 @@ async def handle_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 def clear_webhook():
     """مسح أي webhook أو session قديم قبل البدء"""
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/deleteWebhook",
-            json={"drop_pending_updates": True},
-            timeout=10,
-        )
-        requests.post(
-            f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/close",
-            timeout=8,
-        )
-        time.sleep(2)
-    except Exception:
-        pass
+    for attempt in range(3):
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/deleteWebhook",
+                json={"drop_pending_updates": True},
+                timeout=10,
+            )
+            r = requests.post(
+                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/close",
+                timeout=8,
+            )
+            print(f"[Startup] close API: {r.json()}")
+            time.sleep(4)
+            break
+        except Exception as e:
+            print(f"[Startup] clear_webhook attempt {attempt+1}: {e}")
+            time.sleep(3)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

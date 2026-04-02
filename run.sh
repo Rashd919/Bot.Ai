@@ -8,6 +8,11 @@ echo "⚡ Rashd-Ai Intelligence System v2.0"
 echo "◈ تصميم وتطوير: أبو سعود"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# إيقاف أي نسخة قديمة قبل البدء
+pkill -f "tracker_bot.py" 2>/dev/null
+pkill -f "main_bot.py"    2>/dev/null
+sleep 2
+
 # تشغيل خادم التعقب في الخلفية
 echo "📡 تشغيل خادم التعقب (Flask)..."
 python3 tracker_bot.py &

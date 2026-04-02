@@ -454,7 +454,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = f"أهلاً بك {user_name} في **راشد الاستخباراتي 🤖**، من تصميم وتطوير أبو سعود.\nاختر أداة من الأسفل أو أرسل استفسارك."
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode=\'Markdown\')
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

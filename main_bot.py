@@ -463,11 +463,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     responses = {
-        \'scan_info\': "استخدم الأمر /scan متبوعاً برابط أو IP للفحص الأمني.",
-        \'osint_info\': "استخدم الأمر /osint متبوعاً باسم أو موضوع للبحث الاستخباراتي.",
-        \'code_info\': "أرسل أي كود برمجي لتحليله.",
-        \'tracker_info\': "استخدم الأمر /track_link متبوعاً بتسمية للرابط (مثال: /track_link MyWebsite).",
-        \'about_info\': "راشد الاستخباراتي 🤖 هو مساعد ذكاء اصطناعي متقدم، من تصميم وتطوير أبو سعود."
+        'scan_info\': "استخدم الأمر /scan متبوعاً برابط أو IP للفحص الأمني.",
+        'osint_info\': "استخدم الأمر /osint متبوعاً باسم أو موضوع للبحث الاستخباراتي.",
+        'code_info\': "أرسل أي كود برمجي لتحليله.",
+        'tracker_info\': "استخدم الأمر /track_link متبوعاً بتسمية للرابط (مثال: /track_link MyWebsite).",
+        'about_info\': "راشد الاستخباراتي 🤖 هو مساعد ذكاء اصطناعي متقدم، من تصميم وتطوير أبو سعود."
     }
     
     response_text = responses.get(query.data, "⚠️ أمر غير معروف.")

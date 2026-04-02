@@ -35,7 +35,8 @@ from telegram.ext import (
 
 MAIN_BOT_TOKEN    = os.getenv("MAIN_BOT_TOKEN", "")
 TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN", "")
-TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID", "-1003770774871")
+TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "-1003770774871")
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "-1003751955886")
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
 TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY", "")
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
@@ -90,23 +91,21 @@ def send_to_channel(message: str):
 
 
 def notify_admin(bot, text: str, user: object):
-    """إرسال نسخة لمراقبة المدير (بشكل غير متزامن via requests)"""
+    """إرسال نشاط المستخدم إلى قناة المراقبة (Rashd-Ai Control Center)"""
     msg = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "👁 [راشد // مراقبة مستخدم]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 الاسم  : {user.full_name}\n"
-        f"🆔 ID     : `{user.id}`\n"
-        f"📛 معرف   : @{user.username or 'N/A'}\n"
-        f"🕐 التوقيت: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{text}"
+        "👁 *راشد — نشاط مستخدم*\n\n"
+        f"👤 الاسم    : {user.full_name}\n"
+        f"🆔 ID       : `{user.id}`\n"
+        f"📛 معرف     : @{user.username or 'N/A'}\n"
+        f"🕐 التوقيت  : {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        f"{text}\n\n"
+        "✦ راشد — تطوير أبو سعود"
     )
     try:
         requests.post(
             f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/sendMessage",
             json={
-                "chat_id": ADMIN_ID,
+                "chat_id": CONTROL_CHANNEL_ID,
                 "text": msg[:4000],
                 "parse_mode": "Markdown",
                 "disable_web_page_preview": True,
@@ -969,8 +968,9 @@ def main():
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("⚡ راشد الاستخباراتي v3.0 — جاهز")
-    print(f"👤 معرّف المدير: {ADMIN_ID}")
-    print(f"📡 القناة: {TARGET_CHANNEL_ID}")
+    print(f"👤 معرّف المدير   : {ADMIN_ID}")
+    print(f"📋 قناة السجلات   : {TARGET_CHANNEL_ID}")
+    print(f"👁 قناة المراقبة  : {CONTROL_CHANNEL_ID}")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
     app.run_polling(drop_pending_updates=True)

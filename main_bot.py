@@ -82,7 +82,7 @@ def send_to_channel(message: str):
             json={
                 "chat_id": TARGET_CHANNEL_ID,
                 "text": message,
-                "parse_mode": "Markdown",
+                "parse_mode":parse_mode,
                 "disable_web_page_preview": True,
             },
             timeout=10,

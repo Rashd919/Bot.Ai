@@ -37,8 +37,7 @@ IPINFO_TOKEN   = os.getenv("IPINFO_TOKEN", "")
 VIRUSTOTAL_KEY = os.getenv("VIRUSTOTAL_KEY", "")
 DEHASHED_KEY   = os.getenv("DEHASHED_KEY", "")
 
-_raw_domain    = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
-BOT_SERVER_URL = f"https://{_raw_domain}" if _raw_domain else ""
+BOT_SERVER_URL = os.getenv("BOT_SERVER_URL", "")
 
 # ذاكرة المحادثة لكل مستخدم
 chat_memory: dict[int, list] = defaultdict(list)

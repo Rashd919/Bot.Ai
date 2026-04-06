@@ -39,8 +39,21 @@ IPINFO_TOKEN    = os.getenv("IPINFO_TOKEN", "")
 VIRUSTOTAL_KEY  = os.getenv("VIRUSTOTAL_KEY", "")
 LEAKCHECK_KEY   = os.getenv("LEAKCHECK_KEY", "")
 
-_raw_domain    = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
-BOT_SERVER_URL = f"https://{_raw_domain}" if _raw_domain else ""
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🌐  رابط السيرفر (يدعم Replit + Render + أي منصة)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REPLIT_DOMAIN = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
+RENDER_URL    = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+ENV_URL       = os.getenv("BOT_SERVER_URL", "").rstrip("/")
+
+if RENDER_URL:
+    BOT_SERVER_URL = RENDER_URL
+elif REPLIT_DOMAIN:
+    BOT_SERVER_URL = f"https://{REPLIT_DOMAIN}"
+elif ENV_URL:
+    BOT_SERVER_URL = ENV_URL
+else:
+    BOT_SERVER_URL = ""
 
 # معلومات الدعم
 SUPPORT_INFO = (

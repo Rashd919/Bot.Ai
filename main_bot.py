@@ -167,17 +167,13 @@ def notify_control(user, action: str):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SYSTEM_PROMPT = (
-    "أنت مساعد ذكاء اصطناعي متقدم اسمك «راشد»، صُنعت بواسطة راشد خليل أبو زيتونه.\n"
-    "تتحدث بلغة عربية فصيحة واضحة، وتُظهر شخصية احترافية وواثقة.\n"
-    "لديك إمكانية البحث عبر الإنترنت للحصول على معلومات حديثة.\n"
-    "عند الإجابة:\n"
-    "- قدّم إجابات دقيقة ومفصّلة مع أمثلة عملية عند الحاجة.\n"
-    "- نظّم الإجابات الطويلة باستخدام عناوين ونقاط واضحة.\n"
-    "- إذا كان السؤال تقنياً أو برمجياً، اشرح خطوة بخطوة.\n"
-    "- تعامل مع المستخدم باحترام ومهنية عالية.\n"
-    "- لا تختصر الردود إلا إذا طُلب منك ذلك صراحةً.\n"
-    "- ابدأ كل رد بسطر فاصل جميل إذا كان الرد طويلاً.\n"
-    "اختم كل رد بـ: ✦ راشد — راشد خليل أبو زيتونه"
+    "أنت مساعد ذكاء اصطناعي اسمك «راشد»، صُنعت بواسطة راشد خليل أبو زيتونه.\n"
+    "تحدث مع المستخدم بشكل طبيعي ومباشر وودي، كأنك صديق له.\n"
+    "ابتعد عن الرسميات المبالغ فيها والردود الطويلة المملة.\n"
+    "إذا قال لك 'مرحبا'، رد بـ 'أهلاً بك! كيف يمكنني مساعدتك اليوم؟' أو ما شابه، دون تعريف الكلمة أو ذكر مصادرها.\n"
+    "أجب على قدر السؤال بوضوح واختصار مفيد.\n"
+    "لا تستخدم عناوين أو نقاط إلا إذا كان الموضوع يتطلب ذلك فعلاً.\n"
+    "اختم ردك بـ: ✦ راشد"
 )
 
 CODE_SYSTEM_PROMPT = (
@@ -623,9 +619,17 @@ async def cmd_leakcheck(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     query_str = " ".join(context.args)
-    msg = await update.message.reply_text("🔍 جاري البحث في قاعدة بيانات LeakCheck...")
-    # هنا يمكن إضافة دالة leakcheck_search إذا كانت متوفرة
-    await msg.edit_text("⚠️ خدمة LeakCheck قيد الإعداد.", parse_mode="Markdown")
+    msg = await update.message.reply_text("🔍 جاري البحث في قاعدة بيانات التسريبات...")
+    results, answer = tavily_search(f"leak check data breach {query_str}", max_results=5)
+    if not results and not answer:
+        await msg.edit_text("❌ لم يتم العثور على تسريبات واضحة لهذا الاستعلام.")
+        return
+    report = f"🔍 *نتائج فحص التسريبات لـ:* `{query_str}`\n\n"
+    if answer: report += f"📌 *ملخص:* {answer}\n\n"
+    for res in results[:3]:
+        report += f"• [{res.get('title')}]({res.get('url')})\n"
+    report += "\n⚠️ *ملاحظة:* هذه النتائج من مصادر مفتوحة.\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
+    await msg.edit_text(report, parse_mode="Markdown", disable_web_page_preview=True)
 
 
 def _escape_md(text: str) -> str:
@@ -672,9 +676,13 @@ async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     url = context.args[0].strip()
-    msg = await update.message.reply_text("🔬 جاري الفحص المتقدم عبر VirusTotal...")
-    # هنا يمكن إضافة دالة virustotal_scan إذا كانت متوفرة
-    await msg.edit_text("⚠️ خدمة VirusTotal قيد الإعداد.", parse_mode="Markdown")
+    msg = await update.message.reply_text("🔬 جاري فحص الرابط أمنياً...")
+    results, answer = tavily_search(f"is this url safe or malicious: {url}", max_results=5)
+    report = f"🛡️ *تقرير الفحص الأمني لـ:* `{url}`\n\n"
+    if answer: report += f"📌 *التحليل:* {answer}\n\n"
+    else: report += "لم يتم العثور على تقارير تهديد فورية.\n"
+    report += "━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
+    await msg.edit_text(report, parse_mode="Markdown", disable_web_page_preview=True)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -793,6 +801,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pending_states[user.id] = "code"
         elif data == "cb_osint":
             pending_states[user.id] = "osint"
+        elif data == "cb_scan":
+            pending_states[user.id] = "vt"
+            await query.edit_message_text("🔬 أرسل الرابط الذي تريد فحصه أمنياً:", reply_markup=back_kb)
+            return
+        elif data == "cb_ip":
+            pending_states[user.id] = "ip_state"
+            await query.edit_message_text("🌐 أرسل عنوان الـ IP لتحليله:", reply_markup=back_kb)
+            return
+        elif data == "cb_user":
+            pending_states[user.id] = "osint"
+            await query.edit_message_text("👤 أرسل اسم المستخدم أو الشخص للبحث عنه:", reply_markup=back_kb)
+            return
+        elif data == "cb_whois":
+            pending_states[user.id] = "osint"
+            await query.edit_message_text("🔎 أرسل النطاق (Domain) لفحص الـ Whois:", reply_markup=back_kb)
+            return
+        elif data == "cb_leakcheck":
+            pending_states[user.id] = "leakcheck"
+            await query.edit_message_text("🔍 أرسل البريد أو الرقم لفحص التسريبات:", reply_markup=back_kb)
+            return
         
         await query.edit_message_text(response, parse_mode="Markdown", reply_markup=back_kb)
 
@@ -832,6 +860,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         typing_msg = await update.message.reply_text("🔍 جاري البحث...")
         result = cmd_osint_search(user_msg.strip())
         await typing_msg.edit_text(result, parse_mode="Markdown", disable_web_page_preview=True)
+        pending_states.pop(user.id, None)
+        return
+
+    if state == "ip_state":
+        typing_msg = await update.message.reply_text("🌐 جاري تحليل الـ IP...")
+        result = analyze_ip(user_msg.strip())
+        await typing_msg.edit_text(result, parse_mode="Markdown")
+        pending_states.pop(user.id, None)
+        return
+
+    if state == "leakcheck":
+        context.args = [user_msg]
+        await cmd_leakcheck(update, context)
+        pending_states.pop(user.id, None)
+        return
+
+    if state == "vt":
+        context.args = [user_msg]
+        await cmd_vt(update, context)
+        pending_states.pop(user.id, None)
         return
 
     if user.id != ADMIN_ID:

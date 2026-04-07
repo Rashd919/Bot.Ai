@@ -665,9 +665,6 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ هذا الأمر للمدير فقط.")
-        return
     if not context.args:
         pending_states[user.id] = "vt"
         await update.message.reply_text(
@@ -872,14 +869,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == "leakcheck":
         context.args = [user_msg]
-        await cmd_leakcheck(update, context)
         pending_states.pop(user.id, None)
+        await cmd_leakcheck(update, context)
         return
 
     if state == "vt":
         context.args = [user_msg]
-        await cmd_vt(update, context)
         pending_states.pop(user.id, None)
+        await cmd_vt(update, context)
         return
 
     if user.id != ADMIN_ID:

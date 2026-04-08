@@ -8,10 +8,10 @@ from flask import Flask, request, render_template_string, jsonify
 #  ⚙️  الإعدادات
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",    "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0")
-TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN", "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
-TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "-1003770774871")
-CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "-1003751955886")
+MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",    "")
+TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN", "")
+TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "")
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "")
 IPINFO_TOKEN       = os.getenv("IPINFO_TOKEN", "")
 
 # بيانات الجلسات المؤقتة {session_id: {...}}

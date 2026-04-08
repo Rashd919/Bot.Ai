@@ -28,55 +28,29 @@ from telegram.ext import (
 #  ⚙️  إعدادات النظام
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",    "8556004865:AAE_W9SXGVxgTcpSCufs_hemEb_mOX_ioj0")
-TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN", "8346034907:AAHv4694Nf1Mn3JSwcUeb1Zkl1ZSlsODIx8")
-TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "-1003770774871")
-CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "-1003751955886")
-ADMIN_ID           = int(os.getenv("ADMIN_ID", "6124349953"))
+MAIN_BOT_TOKEN     = os.getenv("MAIN_BOT_TOKEN",    "")
+TRACKER_BOT_TOKEN  = os.getenv("TRACKER_BOT_TOKEN", "")
+ADMIN_ID           = int(os.getenv("ADMIN_ID",      "0"))
+TARGET_CHANNEL_ID  = os.getenv("TARGET_CHANNEL_ID",  "")
+CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "")
 
-GROQ_API_KEY    = os.getenv("GROQ_API_KEY", "")
-TAVILY_API_KEY  = os.getenv("TAVILY_API_KEY", "")
-IPINFO_TOKEN    = os.getenv("IPINFO_TOKEN", "")
-VIRUSTOTAL_KEY  = os.getenv("VIRUSTOTAL_API_KEY", "")
-LEAKCHECK_KEY   = os.getenv("LEAKCHECK_KEY", "")
+GROQ_API_KEY       = os.getenv("GROQ_API_KEY",      "")
+TAVILY_API_KEY     = os.getenv("TAVILY_API_KEY",    "")
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
+LEAKCHECK_KEY      = os.getenv("LEAKCHECK_KEY",      "")
+IPINFO_TOKEN       = os.getenv("IPINFO_TOKEN",       "")
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🌐  رابط السيرفر (يدعم Replit + Render + أي منصة)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REPLIT_DOMAIN = os.getenv("REPLIT_DOMAINS", "").split(",")[0].strip()
-RENDER_URL    = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
-ENV_URL       = os.getenv("BOT_SERVER_URL", "").rstrip("/")
+BOT_SERVER_URL     = os.getenv("BOT_SERVER_URL",     "https://")
 
-if RENDER_URL:
-    BOT_SERVER_URL = RENDER_URL
-elif REPLIT_DOMAIN:
-    BOT_SERVER_URL = f"https://{REPLIT_DOMAIN}"
-elif ENV_URL:
-    BOT_SERVER_URL = ENV_URL
-else:
-    BOT_SERVER_URL = ""
+# ذاكرة مؤقتة للحالات {user_id: state}
+pending_states = {}
+# ذاكرة مؤقتة لروابط السحب {user_id: label}
+pending_grabs  = {}
+# ذاكرة المحادثة للذكاء الاصطناعي {user_id: [messages]}
+chat_history   = defaultdict(list)
+# سجلات روابط السحب {user_id: [logs]}
+user_logs      = defaultdict(list)
 
-# معلومات الدعم
-SUPPORT_INFO = (
-    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    "📞 *تواصل مع المطوّر — راشد خليل أبو زيتونه*\n"
-    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    "📧 *البريد الإلكتروني:*\n`hhh123rrhhh@gmail.com`\n\n"
-    "📱 *واتساب / الهاتف:*\n`+962775866283`\n\n"
-    "💳 *الدعم المادي — CliQ:*\n`RKMZ` — بنك الاتحاد\n\n"
-    "🏦 *التحويل البنكي (IBAN):*\n`JO84UBSI1010000010146661620501`\n"
-    "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    "شكراً لدعمكم 🙏"
-)
-
-# ذاكرة المحادثة لكل مستخدم
-chat_memory: dict[int, list] = defaultdict(list)
-# سجل روابط التعقب
-user_logs: dict[int, list] = defaultdict(list)
-# طلبات grab المعلّقة (انتظار اختيار نوع الصفحة)
-pending_grabs: dict[int, str] = {}
-# حالات انتظار المدخلات من المستخدمين
-pending_states: dict[int, str] = {}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  👥  قاعدة بيانات المستخدمين
@@ -198,13 +172,107 @@ def _wrap_ai_response(reply: str) -> str:
         "└─────────────────────────────┘\n"
         "```\n"
     )
-    return header + reply
+    return header + reply + "\n\n✦ راشد"
 
 
-def tavily_search(query: str, max_results: int = 5):
-    """البحث عبر الإنترنت باستخدام Tavily"""
-    if not TAVILY_API_KEY:
-        return [], ""
+def ask_groq(user_id: int, prompt: str, use_internet: bool = True) -> str:
+    if not GROQ_API_KEY:
+        return "⛔ مفتاح Groq API غير متوفر."
+
+    try:
+        context_msgs = chat_history[user_id][-6:]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend(context_msgs)
+        
+        final_prompt = prompt
+        if use_internet and TAVILY_API_KEY:
+            search_results = tavily_search(prompt)
+            if search_results:
+                final_prompt = f"المعلومات من الإنترنت:\n{search_results}\n\nسؤال المستخدم: {prompt}"
+
+        messages.append({"role": "user", "content": final_prompt})
+
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 1024,
+            },
+            timeout=25,
+        )
+        if r.status_code == 200:
+            reply = r.json()["choices"][0]["message"]["content"]
+            chat_history[user_id].append({"role": "user", "content": prompt})
+            chat_history[user_id].append({"role": "assistant", "content": reply})
+            return reply
+        else:
+            return f"⚠️ خطأ في الذكاء الاصطناعي: {r.status_code}"
+    except Exception as e:
+        return f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}"
+
+
+def analyze_code(code: str) -> str:
+    if not GROQ_API_KEY:
+        return "⛔ مفتاح Groq API غير متوفر."
+    try:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": CODE_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"حلل هذا الكود:\n\n{code}"}
+                ],
+                "temperature": 0.3,
+            },
+            timeout=30,
+        )
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+        return f"⚠️ خطأ في تحليل الكود: {r.status_code}"
+    except Exception as e:
+        return f"❌ فشل تحليل الكود: {e}"
+
+
+def analyze_image_groq(image_bytes: bytes, caption: str) -> str:
+    if not GROQ_API_KEY:
+        return "⛔ مفتاح Groq API غير متوفر."
+    try:
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            json={
+                "model": "llama-3.2-11b-vision-preview",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": caption},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }
+                ],
+            },
+            timeout=30,
+        )
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+        return f"⚠️ خطأ في تحليل الصورة: {r.status_code}"
+    except Exception as e:
+        return f"❌ فشل تحليل الصورة: {e}"
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🌐  أدوات الاستخبارات | OSINT Tools
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def tavily_search(query: str) -> str:
+    if not TAVILY_API_KEY: return ""
     try:
         r = requests.post(
             "https://api.tavily.com/search",
@@ -212,207 +280,93 @@ def tavily_search(query: str, max_results: int = 5):
                 "api_key": TAVILY_API_KEY,
                 "query": query,
                 "search_depth": "advanced",
-                "max_results": max_results,
-                "include_answer": True,
+                "max_results": 5
             },
-            timeout=20,
+            timeout=15
         )
-        r.raise_for_status()
-        return r.json().get("results", []), r.json().get("answer", "")
-    except Exception as e:
-        print(f"[TAVILY] خطأ البحث: {e}")
-        return [], ""
+        if r.status_code == 200:
+            results = r.json().get("results", [])
+            return "\n".join([f"- {res['title']}: {res['content'][:200]}... ({res['url']})" for res in results])
+    except:
+        pass
+    return ""
 
-
-def _groq_post(system: str, messages: list, max_tokens: int = 2048, use_search: bool = False) -> str:
-    """إرسال طلب إلى Groq مع دعم البحث عبر الإنترنت"""
-    if not GROQ_API_KEY:
-        return "⛔ مفتاح Groq غير مُهيّأ. تواصل مع المطوّر."
-    
-    try:
-        # إذا كان البحث مفعّلاً، حاول البحث عن معلومات إضافية
-        search_context = ""
-        if use_search and TAVILY_API_KEY:
-            # استخرج السؤال من آخر رسالة
-            if messages and messages[-1].get("role") == "user":
-                query = messages[-1].get("content", "")[:100]
-                results, answer = tavily_search(query, max_results=3)
-                if answer:
-                    search_context = f"\n\n📌 *معلومات من البحث:*\n{answer[:500]}\n"
-                if results:
-                    search_context += "\n*المصادر:*\n"
-                    for res in results[:3]:
-                        search_context += f"• {res.get('title', '')[:60]}\n"
-        
-        # أضف السياق البحثي إلى الرسالة الأخيرة إن وجد
-        if search_context and messages:
-            messages = messages.copy()
-            if messages[-1].get("role") == "user":
-                messages[-1]["content"] = messages[-1]["content"] + search_context
-        
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "system", "content": system}] + messages,
-                "temperature": 0.6,
-                "max_tokens": max_tokens,
-            },
-            timeout=45,
-        )
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
-    except requests.exceptions.HTTPError as e:
-        return f"⚠️ خطأ في الاتصال بـ Groq — كود: {e.response.status_code}"
-    except requests.exceptions.Timeout:
-        return "⚠️ انتهت مهلة الاتصال بالذكاء الاصطناعي، حاول مجدداً."
-    except Exception as e:
-        return f"⚠️ خطأ غير متوقع: {str(e)[:100]}"
-
-
-def ask_groq(user_id: int, prompt: str, use_internet: bool = True) -> str:
-    """طلب من Groq مع إمكانية البحث عبر الإنترنت"""
-    history = chat_memory[user_id]
-    history.append({"role": "user", "content": prompt})
-    if len(history) > 20:
-        history = history[-20:]
-        chat_memory[user_id] = history
-    
-    # استخدم البحث عبر الإنترنت إذا كان متاحاً
-    reply = _groq_post(SYSTEM_PROMPT, history, max_tokens=2048, use_search=use_internet and bool(TAVILY_API_KEY))
-    chat_memory[user_id].append({"role": "assistant", "content": reply})
-    return _wrap_ai_response(reply)
-
-
-def analyze_code(code: str) -> str:
-    user_msg = f"حلّل هذا الكود:\n\n```\n{code}\n```"
-    reply = _groq_post(CODE_SYSTEM_PROMPT, [{"role": "user", "content": user_msg}], max_tokens=2048)
-    return _wrap_ai_response(reply)
-
-
-def analyze_image_groq(image_bytes: bytes, prompt: str) -> str:
-    if not GROQ_API_KEY:
-        return "⛔ مفتاح Groq غير مُهيّأ."
-    b64 = base64.b64encode(image_bytes).decode()
-    try:
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": f"{SYSTEM_PROMPT}\n\nمهمة: {prompt}"},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                        ],
-                    }
-                ],
-                "temperature": 0.4,
-                "max_tokens": 1024,
-            },
-            timeout=45,
-        )
-        r.raise_for_status()
-        reply = r.json()["choices"][0]["message"]["content"]
-        return _wrap_ai_response(reply)
-    except Exception as e:
-        return f"⚠️ [راشد // خطأ رؤية]\n{str(e)[:80]}"
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🌐  تحليل IP | IPInfo
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def analyze_ip(ip: str) -> str:
     try:
-        r = requests.get(
-            f"https://ipinfo.io/{ip}/json",
-            headers={"Authorization": f"Bearer {IPINFO_TOKEN}"} if IPINFO_TOKEN else {},
-            timeout=10,
-        )
-        if r.status_code != 200:
-            r2 = requests.get(f"http://ip-api.com/json/{ip}", timeout=8)
-            if r2.status_code == 200:
-                d2 = r2.json()
-                loc_str = f"{d2.get('lat', 'N/A')},{d2.get('lon', 'N/A')}"
-                maps = f"https://maps.google.com/?q={loc_str}" if d2.get('lat') else ""
-                report = (
-                    "```\n"
-                    "┌─────────────────────────┐\n"
-                    "│   🌐  تحليل عنوان IP    │\n"
-                    "└─────────────────────────┘\n"
-                    "```\n"
-                    f"📍 *IP:* `{ip}`\n"
-                    f"🏳️ *الدولة:* {d2.get('country','N/A')}\n"
-                    f"🏙️ *المدينة:* {d2.get('city','N/A')}\n"
-                    f"📍 *المنطقة:* {d2.get('regionName','N/A')}\n"
-                    f"🏢 *المزود:* {d2.get('isp','N/A')}\n"
-                    f"🌐 *الاتصال:* {d2.get('as','N/A')}\n"
-                )
-                if maps:
-                    report += f"🗺️ *الموقع:* [افتح الخريطة]({maps})\n"
-                report += "━━━━━━━━━━━━━━━━━━━━━\n✦ راشد — راشد خليل أبو زيتونه"
-                return report
-            return f"⚠️ فشل جلب بيانات الـ IP — كود: {r.status_code}"
-        d = r.json()
-        loc = d.get("loc", "")
-        maps = f"https://maps.google.com/?q={loc}" if loc else ""
-        report = (
+        # ipinfo.io
+        r1 = requests.get(f"https://ipinfo.io/{ip}/json?token={IPINFO_TOKEN}", timeout=10)
+        d1 = r1.json() if r1.status_code == 200 else {}
+        
+        # ip-api.com (Advanced)
+        r2 = requests.get(f"http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,regionName,city,isp,org,as,asname,reverse,mobile,proxy,hosting,query", timeout=10)
+        d2 = r2.json() if r2.status_code == 200 else {}
+
+        if not d1 and not d2: return "❌ تعذر جلب بيانات الـ IP."
+
+        res = (
             "```\n"
             "┌─────────────────────────┐\n"
             "│   🌐  تحليل عنوان IP    │\n"
             "└─────────────────────────┘\n"
             "```\n"
-            f"📍 *IP:* `{d.get('ip', ip)}`\n"
-            f"🏳️ *الدولة:* {d.get('country','N/A')}\n"
-            f"🏙️ *المدينة:* {d.get('city','N/A')}\n"
-            f"📍 *المنطقة:* {d.get('region','N/A')}\n"
-            f"🏢 *المزود:* {d.get('org','N/A')}\n"
-            f"🕐 *المنطقة الزمنية:* {d.get('timezone','N/A')}\n"
+            f"📍 *IP:* `{ip}`\n"
+            f"🏳️ *الدولة:* {d2.get('country', d1.get('country', 'N/A'))}\n"
+            f"🏙️ *المدينة:* {d2.get('city', d1.get('city', 'N/A'))}\n"
+            f"🏢 *المزود:* {d2.get('isp', d1.get('org', 'N/A'))}\n"
+            f"🌐 *Hostname:* `{d2.get('reverse', d1.get('hostname', 'N/A'))}`\n"
+            f"🔍 *النوع:* {'⚠️ VPN/Proxy' if d2.get('proxy') else ('🏢 Hosting' if d2.get('hosting') else '✅ حقيقي')}\n"
+            f"📱 *هاتف:* {'نعم' if d2.get('mobile') else 'لا'}\n"
+            f"🏛️ *ASN:* {d2.get('as', 'N/A')}\n"
+            f"🗺️ *الإحداثيات:* `{d1.get('loc', 'N/A')}`\n"
+            "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
         )
-        if maps:
-            report += f"🗺️ *الموقع:* [افتح الخريطة]({maps})\n"
-        report += "━━━━━━━━━━━━━━━━━━━━━\n✦ راشد — راشد خليل أبو زيتونه"
-        return report
+        return res
     except Exception as e:
-        return f"⚠️ خطأ في تحليل الـ IP: {str(e)[:80]}"
+        return f"❌ خطأ في تحليل IP: {e}"
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🔍  البحث الحي | Tavily
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def cmd_osint_search(query: str) -> str:
-    results, answer = tavily_search(query, 5)
-    if not results and not answer:
-        return "⛔ فشل البحث أو لا توجد نتائج."
-    report = (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   📡  تقرير OSINT       │\n"
-        "└─────────────────────────┘\n"
-        "```\n"
-        f"🔎 *الاستعلام:* `{query}`\n\n"
-    )
-    if answer:
-        report += f"📌 *ملخص:*\n{answer[:500]}\n\n"
-    report += "📂 *المصادر:*\n"
-    for i, res in enumerate(results[:4], 1):
-        title = res.get("title", "—")[:60]
-        url   = res.get("url", "#")
-        snip  = res.get("content", "")[:120]
-        report += f"\n{i}▪ *{title}*\n   🔗 {url}\n   ↳ {snip}...\n"
-    report += "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد — راشد خليل أبو زيتونه"
-    return report
+    if not TAVILY_API_KEY: return "⛔ مفتاح Tavily غير متوفر."
+    
+    try:
+        r = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": TAVILY_API_KEY,
+                "query": query,
+                "search_depth": "advanced",
+                "include_answer": True,
+                "max_results": 5
+            },
+            timeout=20
+        )
+        if r.status_code != 200: return f"⚠️ خطأ في البحث: {r.status_code}"
+        
+        data = r.json()
+        results = data.get("results", [])
+        answer  = data.get("answer")
+        
+        report = (
+            "```\n"
+            "┌─────────────────────────┐\n"
+            "│   📡  تقرير OSINT       │\n"
+            "└─────────────────────────┘\n"
+            "```\n"
+            f"🔎 *الاستعلام:* `{query}`\n\n"
+        )
+        if answer:
+            report += f"📌 *ملخص:*\n{answer[:500]}\n\n"
+        report += "📂 *المصادر:*\n"
+        for i, res in enumerate(results[:4], 1):
+            title = res.get("title", "—")[:60]
+            url   = res.get("url", "#")
+            snip  = res.get("content", "")[:120]
+            report += f"\n{i}▪ *{title}*\n   🔗 {url}\n   ↳ {snip}...\n"
+        report += "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد — راشد خليل أبو زيتونه"
+        return report
+    except Exception as e:
+        return f"❌ فشل بحث OSINT: {e}"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -546,145 +500,153 @@ async def cmd_grab(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     label = " ".join(context.args) if context.args else "رابط عام"
+    pending_grabs[user.id] = label
     
     kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📰 صفحة إخبارية", callback_data="cb_grab_news"),
-            InlineKeyboardButton("📥 تحميل ملف", callback_data="cb_grab_download"),
-        ],
-        [
-            InlineKeyboardButton("🤖 توجيه للبوت", callback_data="cb_grab_bot"),
-            InlineKeyboardButton("🔒 تحقق أمني", callback_data="cb_grab_verify"),
-        ],
+        [InlineKeyboardButton("📰 صفحة إخبارية", callback_data="cb_grab_news")],
+        [InlineKeyboardButton("📥 تحميل ملف",   callback_data="cb_grab_download")],
+        [InlineKeyboardButton("🤖 توجيه للبوت",  callback_data="cb_grab_bot")],
+        [InlineKeyboardButton("🔒 تحقق أمني",   callback_data="cb_grab_verify")],
     ])
-    
-    pending_grabs[user.id] = label
-    await update.message.reply_text(
-        "اختر نوع الصفحة التي تريد استخدامها:",
-        reply_markup=kb
-    )
+    await update.message.reply_text("🕵️ اختر نوع الصفحة التي سيراها الضحية:", reply_markup=kb)
 
 
 async def cmd_mylogs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logs = user_logs.get(user.id, [])
-    
     if not logs:
-        await update.message.reply_text("📋 لا توجد سجلات لديك حتى الآن.")
+        await update.message.reply_text("📭 ليس لديك أي روابط نشطة حالياً.")
         return
     
-    report = (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   📋  سجلاتي            │\n"
-        "└─────────────────────────┘\n"
-        "```\n\n"
-    )
-    
-    for i, log in enumerate(logs[-10:], 1):
-        report += (
-            f"**{i}. {log.get('label', 'بدون تسمية')}**\n"
-            f"   📄 النوع: {log.get('page', 'N/A')}\n"
-            f"   🔗 [الرابط]({log.get('url', '#')})\n"
-            f"   🕐 {log.get('timestamp', 'N/A')}\n\n"
-        )
-    
-    await update.message.reply_text(report, parse_mode="Markdown", disable_web_page_preview=True)
+    text = "📋 *سجلات روابطك النشطة:*\n\n"
+    for i, log in enumerate(logs, 1):
+        text += f"{i}▪ *{log['label']}*\n   🔗 `{log['url']}`\n   📅 {log['timestamp']}\n\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id in chat_memory:
-        chat_memory[user.id] = []
-    await update.message.reply_text("🧹 تم مسح ذاكرة المحادثة.")
-
-
-async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 واتساب", url="https://wa.me/962775866283")],
-        [InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")],
-    ])
-    await update.message.reply_text(SUPPORT_INFO, parse_mode="Markdown", reply_markup=kb)
-
-
-async def cmd_leakcheck(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not context.args:
-        pending_states[user.id] = "leakcheck"
-        await update.message.reply_text(
-            "🔍 *LeakCheck — بحث التسريبات*\n\n"
-            "أرسل الآن ما تريد البحث عنه:\n"
-            "• بريد إلكتروني\n• اسم مستخدم\n• رقم هاتف\n• اسم\n• عنوان IP",
-            parse_mode="Markdown"
-        )
-        return
-    query_str = " ".join(context.args)
-    msg = await update.message.reply_text("🔍 جاري البحث في قاعدة بيانات التسريبات...")
-    results, answer = tavily_search(f"leak check data breach {query_str}", max_results=5)
-    if not results and not answer:
-        await msg.edit_text("❌ لم يتم العثور على تسريبات واضحة لهذا الاستعلام.")
-        return
-    report = f"🔍 *نتائج فحص التسريبات لـ:* `{query_str}`\n\n"
-    if answer: report += f"📌 *ملخص:* {answer}\n\n"
-    for res in results[:3]:
-        report += f"• [{res.get('title')}]({res.get('url')})\n"
-    report += "\n⚠️ *ملاحظة:* هذه النتائج من مصادر مفتوحة.\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
-    await msg.edit_text(report, parse_mode="Markdown", disable_web_page_preview=True)
-
-
-def _escape_md(text: str) -> str:
-    for ch in r"\_*[]()~`>#+-=|{}.!":
-        text = text.replace(ch, f"\\{ch}")
-    return text
+    chat_history[user.id] = []
+    await update.message.reply_text("🧹 تم مسح ذاكرة المحادثة بنجاح.")
 
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ هذا الأمر للمدير فقط.")
-        return
-    db    = load_users()
-    count = len(db)
-    report = (
-        f"📊 *إحصائيات البوت*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👥 إجمالي المستخدمين: *{count}*\n\n"
-    )
-    recent = sorted(db.values(), key=lambda x: x.get("joined",""), reverse=True)[:5]
-    if recent:
-        report += "🕐 *آخر 5 مستخدمين انضموا:*\n"
-        for u in recent:
-            name   = _escape_md(u.get("first_name", "—"))
-            uname  = f"@{_escape_md(u['username'])}" if u.get("username") else "—"
-            uid    = u.get("id","—")
-            joined = u.get("joined","—")
-            report += f"• {name} \\({uname}\\) \\| `{uid}` \\| {joined}\n"
-    report += "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
-    await update.message.reply_text(report, parse_mode="MarkdownV2")
+    if update.effective_user.id != ADMIN_ID: return
+    count = get_users_count()
+    await update.message.reply_text(f"📊 *إحصائيات النظام:*\n\n👥 عدد المستخدمين: {count}", parse_mode="Markdown")
 
 
 async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not context.args:
-        pending_states[user.id] = "vt"
-        await update.message.reply_text(
-            "🔬 *VirusTotal*\n\nأرسل الآن الرابط الذي تريد فحصه:",
-            parse_mode="Markdown"
-        )
+    url = context.args[0] if context.args else ""
+    if not url:
+        await update.message.reply_text("🔬 يرجى إرسال الرابط للفحص: `/scan https://example.com`", parse_mode="Markdown")
         return
-    url = context.args[0].strip()
-    msg = await update.message.reply_text("🔬 جاري فحص الرابط أمنياً...")
-    results, answer = tavily_search(f"is this url safe or malicious: {url}", max_results=5)
-    report = f"🛡️ *تقرير الفحص الأمني لـ:* `{url}`\n\n"
-    if answer: report += f"📌 *التحليل:* {answer}\n\n"
-    else: report += "لم يتم العثور على تقارير تهديد فورية.\n"
-    report += "━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
-    await msg.edit_text(report, parse_mode="Markdown", disable_web_page_preview=True)
+    
+    if not VIRUSTOTAL_API_KEY:
+        await update.message.reply_text("⛔ مفتاح VirusTotal غير متوفر.")
+        return
+
+    msg = await update.message.reply_text("🔬 جاري فحص الرابط عبر VirusTotal...")
+    try:
+        # 1. Submit URL
+        r = requests.post(
+            "https://www.virustotal.com/api/v3/urls",
+            headers={"x-apikey": VIRUSTOTAL_API_KEY},
+            data={"url": url},
+            timeout=15
+        )
+        if r.status_code != 200:
+            await msg.edit_text(f"⚠️ خطأ في VirusTotal: {r.status_code}")
+            return
+        
+        analysis_id = r.json()["data"]["id"]
+        
+        # 2. Get Report (Wait a bit)
+        time.sleep(2)
+        r = requests.get(
+            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+            headers={"x-apikey": VIRUSTOTAL_API_KEY},
+            timeout=15
+        )
+        if r.status_code == 200:
+            stats = r.json()["data"]["attributes"]["stats"]
+            res = (
+                "```\n"
+                "┌─────────────────────────┐\n"
+                "│   🛡️  تقرير VirusTotal   │\n"
+                "└─────────────────────────┘\n"
+                "```\n"
+                f"🔗 *الرابط:* `{url}`\n\n"
+                f"✅ سليم: `{stats['harmless'] + stats['undetected']}`\n"
+                f"⚠️ مشبوه: `{stats['suspicious']}`\n"
+                f"❌ خبيث: `{stats['malicious']}`\n"
+                f"🚫 فشل: `{stats['timeout']}`\n"
+                "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
+            )
+            await msg.edit_text(res, parse_mode="Markdown")
+        else:
+            await msg.edit_text("⚠️ تعذر جلب التقرير حالياً.")
+    except Exception as e:
+        await msg.edit_text(f"❌ خطأ: {e}")
+
+
+async def cmd_leakcheck(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = context.args[0] if context.args else ""
+    if not query:
+        await update.message.reply_text("🔍 يرجى إرسال البريد أو الرقم للفحص: `/leakcheck email@example.com`", parse_mode="Markdown")
+        return
+    
+    if not LEAKCHECK_KEY:
+        await update.message.reply_text("⛔ مفتاح LeakCheck غير متوفر.")
+        return
+
+    msg = await update.message.reply_text("🔍 جاري فحص التسريبات...")
+    try:
+        r = requests.get(
+            f"https://leakcheck.io/api/v2/query/{query}?key={LEAKCHECK_KEY}",
+            timeout=15
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("success") and data.get("found", 0) > 0:
+                sources = data.get("sources", [])
+                res = (
+                    "```\n"
+                    "┌─────────────────────────┐\n"
+                    "│   🔍  نتائج التسريبات   │\n"
+                    "└─────────────────────────┘\n"
+                    "```\n"
+                    f"📧 *الهدف:* `{query}`\n"
+                    f"⚠️ *عدد التسريبات:* `{data['found']}`\n\n"
+                    "*أبرز المصادر:*\n"
+                )
+                for s in sources[:5]:
+                    res += f"• {s.get('name', 'غير معروف')} ({s.get('date', 'N/A')})\n"
+                res += "\n━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
+                await msg.edit_text(res, parse_mode="Markdown")
+            else:
+                await msg.edit_text("✅ لم يتم العثور على تسريبات لهذا الهدف.")
+        else:
+            await msg.edit_text(f"⚠️ خطأ في LeakCheck: {r.status_code}")
+    except Exception as e:
+        await msg.edit_text(f"❌ خطأ: {e}")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  🔘  معالج الأزرار | Callback Handler
+#  🔘  معالجات الأزرار والرسائل
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SUPPORT_INFO = (
+    "```\n"
+    "┌─────────────────────────┐\n"
+    "│   📞  الدعم والتواصل    │\n"
+    "└─────────────────────────┘\n"
+    "```\n"
+    "إذا واجهت أي مشكلة أو لديك استفسار، يمكنك التواصل مع المطور مباشرة عبر الواتساب.\n\n"
+    "👤 *المطور:* راشد خليل أبو زيتونه\n"
+    "📱 *واتساب:* +962775866283\n\n"
+    "✦ راشد"
+)
 
 BUTTON_RESPONSES = {
     "cb_ai": (
@@ -693,10 +655,7 @@ BUTTON_RESPONSES = {
         "│   🤖  الذكاء الاصطناعي  │\n"
         "└─────────────────────────┘\n"
         "```\n"
-        "أرسل سؤالك أو استفسارك مباشرةً وسأردّ عليك.\n"
-        "أتذكّر سياق المحادثة تلقائياً.\n"
-        "لدي إمكانية البحث عبر الإنترنت للإجابات الحديثة.\n\n"
-        "🧹 لمسح الذاكرة: /clear"
+        "أنا الآن في وضع الاستعداد. أرسل أي سؤال أو موضوع وسأجيبك فوراً مع البحث في الإنترنت إذا لزم الأمر."
     ),
     "cb_code": (
         "```\n"
@@ -787,7 +746,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"ستصلك تفاصيل كاملة عن جهازه وموقعه!"
         )
         await query.edit_message_text(msg, parse_mode="Markdown")
-        del pending_grabs[user.id]
+        pending_grabs.pop(user.id, None)
         return
 
     response = BUTTON_RESPONSES.get(data)
@@ -950,23 +909,26 @@ def main():
     app.add_handler(CommandHandler("grab",     cmd_grab))
     app.add_handler(CommandHandler("mylogs",   cmd_mylogs))
     app.add_handler(CommandHandler("clear",    cmd_clear))
-    app.add_handler(CommandHandler("support",  cmd_support))
-    app.add_handler(CommandHandler("leakcheck", cmd_leakcheck))
-    app.add_handler(CommandHandler("vt",       cmd_vt))
     app.add_handler(CommandHandler("stats",    cmd_stats))
+    app.add_handler(CommandHandler("scan",     cmd_vt))
+    app.add_handler(CommandHandler("vt",       cmd_vt))
+    app.add_handler(CommandHandler("leakcheck",cmd_leakcheck))
+    app.add_handler(CommandHandler("support",  cmd_help)) # Redirect to help or custom
+    
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     register_bot_commands()
+    
+    print("✅ قائمة الأوامر حُدِّثت في Telegram")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f"⚡ راشد الاستخباراتي v2.0 — يعمل الآن")
     print(f"🤖 البوت: {MAIN_BOT_TOKEN.split(':')[0]}")
-    print(f"🌐 الخادم: {BOT_SERVER_URL}")
     print(f"👥 المستخدمون المسجّلون: {get_users_count()}")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    app.run_polling(drop_pending_updates=True)
-
+    
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

@@ -4,10 +4,20 @@ import json
 import base64
 import hashlib
 import time
+import asyncio
+import logging
 import requests
 import threading
 from datetime import datetime
 from collections import defaultdict
+
+# تسجيل الأخطاء في ملف حتى لا تضيع عند تعطل البوت
+logging.basicConfig(
+    filename="bot_error.log",
+    level=logging.ERROR,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logging.getLogger("telegram").setLevel(logging.WARNING)
 from tracker_server import create_tracker_app, start_tracker_server
 
 from telegram import (
@@ -186,7 +196,10 @@ def ask_groq(user_id: int, prompt: str, use_internet: bool = True) -> str:
         
         final_prompt = prompt
         if use_internet and TAVILY_API_KEY:
+            # البحث بالعربية أولاً، وإن لم توجد نتائج نبحث بالإنجليزية لضمان الحصول على معلومات
             search_results = tavily_search(prompt)
+            if not search_results:
+                search_results = tavily_search(prompt + " in English", english=True)
             if search_results:
                 final_prompt = f"المعلومات من الإنترنت:\n{search_results}\n\nسؤال المستخدم: {prompt}"
 
@@ -208,6 +221,12 @@ def ask_groq(user_id: int, prompt: str, use_internet: bool = True) -> str:
             chat_history[user_id].append({"role": "user", "content": prompt})
             chat_history[user_id].append({"role": "assistant", "content": reply})
             return reply
+        elif r.status_code == 401:
+            # مفتاح Groq مرفوض (منتهي أو غير صالح) — إرجاع رد احتياطي واضح
+            logging.error("Groq API returned 401 Unauthorized — invalid/expired key")
+            return "⛔ خدمة الذكاء الاصطناعي غير متاحة حالياً (مفتاح Groq منتهي). تواصل مع المطوّر لاستبداله."
+        elif r.status_code == 429:
+            return "⏳ تجاوزت حد الاستخدام لخدمة الذكاء الاصطناعي. انتظر دقيقة ثم أعد المحاولة."
         else:
             return f"⚠️ خطأ في الذكاء الاصطناعي: {r.status_code}"
     except Exception as e:
@@ -247,7 +266,7 @@ def analyze_image_groq(image_bytes: bytes, caption: str) -> str:
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
-                "model": "llama-3.2-11b-vision-preview",
+                "model": "llama-3.2-90b-vision-preview",
                 "messages": [
                     {
                         "role": "user",
@@ -271,24 +290,34 @@ def analyze_image_groq(image_bytes: bytes, caption: str) -> str:
 #  🌐  أدوات الاستخبارات | OSINT Tools
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def tavily_search(query: str) -> str:
+def tavily_search(query: str, english: bool = False) -> str:
     if not TAVILY_API_KEY: return ""
     try:
+        body = {
+            "api_key": TAVILY_API_KEY,
+            "query": query,
+            "search_depth": "advanced",
+            "max_results": 5
+        }
+        if english:
+            body["include_answer"] = True
         r = requests.post(
             "https://api.tavily.com/search",
-            json={
-                "api_key": TAVILY_API_KEY,
-                "query": query,
-                "search_depth": "advanced",
-                "max_results": 5
-            },
+            json=body,
             timeout=15
         )
         if r.status_code == 200:
-            results = r.json().get("results", [])
-            return "\n".join([f"- {res['title']}: {res['content'][:200]}... ({res['url']})" for res in results])
-    except:
-        pass
+            data = r.json()
+            results = data.get("results", [])
+            lines = []
+            if english and data.get("answer"):
+                lines.append(f"ملخص: {data['answer'][:400]}")
+            lines.extend([f"- {res['title']}: {res['content'][:200]}... ({res['url']})" for res in results])
+            out = "\n".join(lines)
+            if out:
+                return out
+    except Exception as e:
+        logging.warning("Tavily search failed: %s", e)
     return ""
 
 
@@ -855,14 +884,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user    = update.effective_user
     caption = update.message.caption or "صف ما تراه في الصورة بالتفصيل"
-    msg     = await update.message.reply_text("🖼️ جاري تحليل الصورة...")
-    photo   = update.message.photo[-1]
-    file    = await context.bot.get_file(photo.file_id)
-    img_bytes = bytes(await file.download_as_bytearray())
-    result  = analyze_image_groq(img_bytes, caption)
-    await msg.edit_text(result, parse_mode="Markdown")
-    if user.id != ADMIN_ID:
-        notify_control(user, "أرسل صورة للتحليل")
+    try:
+        msg     = await update.message.reply_text("🖼️ جاري تحليل الصورة...")
+        photo   = update.message.photo[-1]
+        file    = await context.bot.get_file(photo.file_id)
+        img_bytes = bytes(await file.download_as_bytearray())
+        result  = analyze_image_groq(img_bytes, caption)
+        await msg.edit_text(result, parse_mode="Markdown")
+        if user.id != ADMIN_ID:
+            notify_control(user, "أرسل صورة للتحليل")
+    except Exception as e:
+        logging.exception("خطأ في معالجة الصورة")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحليل الصورة. أعد المحاولة لاحقاً.")
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """معالج الأخطاء المركزي — يمنع توقف البوت عند أي استثناء غير متوقع."""
+    err = context.error
+    logging.exception("استثناء غير معالَج: %s", err)
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "⚠️ حدث خطأ غير متوقع أثناء معالجة طلبك. أعد المحاولة."
+            )
+        except Exception:
+            pass
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -913,22 +959,127 @@ def main():
     app.add_handler(CommandHandler("scan",     cmd_vt))
     app.add_handler(CommandHandler("vt",       cmd_vt))
     app.add_handler(CommandHandler("leakcheck",cmd_leakcheck))
-    app.add_handler(CommandHandler("support",  cmd_help)) # Redirect to help or custom
+    app.add_handler(CommandHandler("support", cmd_help)) # Redirect to help or custom
     
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     register_bot_commands()
-    
+    app.add_handler(CommandHandler("osint",  _fallback_osint))
+    app.add_handler(CommandHandler("user",   _fallback_user))
+    app.add_handler(CommandHandler("ip",     _fallback_ip))
+    app.add_handler(CommandHandler("whois",  _fallback_whois))
+    app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)"))
+
+    # معالج الأخطاء المركزي
+    app.add_error_handler(error_handler)
+
+    # مراقبة صحة التشغيل: فحص دوري للويب هوك/التحديثات
+    monitor_thread = threading.Thread(target=_self_health_monitor, daemon=True)
+    monitor_thread.start()
+    print("🩺 مراقب الصحة الذاتي يعمل (فحص كل 5 دقائق)")
+
     print("✅ قائمة الأوامر حُدِّثت في Telegram")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"⚡ راشد الاستخباراتي v2.0 — يعمل الآن")
+    print(f"⚡ راشد الاستخباراتي v2.1 — يعمل الآن")
     print(f"🤖 البوت: {MAIN_BOT_TOKEN.split(':')[0]}")
     print(f"👥 المستخدمون المسجّلون: {get_users_count()}")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    
-    app.run_polling()
+
+    # حلقة تشغيل مستقرة: عند أي تعطل يعيد الاتصال تلقائياً
+    # timeout=60 يجلب تحديثات كل دقيقة — مفيد على الاستضافات المجانية التي توقف العمليات الخاملة
+    while True:
+        try:
+            asyncio.run(
+                app.run_polling(
+                    poll_interval=1.0,
+                    timeout=60,
+                    bootstrap_retries=-1,
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=False,
+                )
+            )
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            logging.exception("polling انقطع: %s", e)
+            print(f"⚠️ انقطع الاتصال بـ polling: {e} — إعادة المحاولة بعد 10 ثوانٍ...")
+            time.sleep(10)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🩺  مراقب الصحة الذاتي | Self Health Monitor
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _self_health_monitor():
+    """يتأكد كل 5 دقائق أن البوت يستجيب لواجهة تلغرام؛ إن لم يستجب يوقف نفسه
+    حتى يقوم نظام إدارة العمليات (systemd / run.sh / الاستضافة) بإعادة تشغيله."""
+    while True:
+        time.sleep(300)
+        try:
+            r = requests.get(
+                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/getMe", timeout=15
+            )
+            if r.status_code != 200 or not r.json().get("ok"):
+                print("🚨 فشل التحقق من واجهة تلغرام — إيقاف العملية لإعادة التشغيل")
+                logging.error("health check failed: status=%s body=%s", r.status_code, r.text[:200])
+                os._exit(1)
+        except Exception as e:
+            logging.error("خطأ في فحص الصحة: %s", e)
+            os._exit(1)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🔘  معالجات أوامر الأزرار غير المسجلة بالأوامر
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def _fallback_osint(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args) if context.args else ""
+    if not query:
+        await update.message.reply_text(
+            "👤 أرسل اسم المستخدم أو الشخص للبحث عنه:\n`/osint اسم الشخص`",
+            parse_mode="Markdown",
+        )
+        return
+    pending_states[update.effective_user.id] = "osint"
+    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+
+
+async def _fallback_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args) if context.args else ""
+    if not query:
+        await update.message.reply_text("👤 أرسل اسم المستخدم أو الشخص للبحث عنه:\n`/user اسم الشخص`", parse_mode="Markdown")
+        return
+    pending_states[update.effective_user.id] = "osint"
+    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+
+
+async def _fallback_ip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = context.args[0] if context.args else ""
+    if not query:
+        await update.message.reply_text("🌐 أرسل عنوان الـ IP:\n`/ip 8.8.8.8`", parse_mode="Markdown")
+        return
+    msg = await update.message.reply_text("🌐 جاري تحليل الـ IP...")
+    await msg.edit_text(analyze_ip(query), parse_mode="Markdown")
+
+
+async def _fallback_whois(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    domain = context.args[0] if context.args else ""
+    if not domain:
+        await update.message.reply_text("🔎 أرسل النطاق:\n`/whois example.com`", parse_mode="Markdown")
+        return
+    pending_states[update.effective_user.id] = "osint"
+    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+
+
+async def _cb_unhandled(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالج احتياطي لأزرار القائمة التي ليس لها معالج callback — يعيد عرض القائمة الرئيسية."""
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(
+        "اختر من القائمة أدناه 👇",
+        reply_markup=build_main_keyboard(update.effective_user.id == ADMIN_ID),
+    )
 
 if __name__ == "__main__":
     main()

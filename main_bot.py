@@ -1067,6 +1067,27 @@ def register_bot_commands():
         print(f"⚠️ خطأ في setMyCommands: {e}")
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  📢  لوحة الإرسال الجماعي (زر المدير)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def _cb_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """زر '📢 إرسال جماعي' في لوحة المدير — يطلب من المدير كتابة النص"""
+    query = update.callback_query
+    if query.from_user.id != ADMIN_ID:
+        await query.answer("⛔ هذا الإجراء للمدير فقط.", show_alert=True)
+        return
+    await query.answer()
+    pending_states[query.from_user.id] = "broadcast_confirm"
+    context.user_data.pop("pending_broadcast", None)
+    await query.message.reply_text(
+        "📢 *اكتب الآن نص الرسالة الجماعية* في رسالة واحدة،\n"
+        "وسيعرض لك معاينة لتأكيد الإرسال.\n\n"
+        "ملاحظة: يستقبلها كل مستخدم جرّب البوت، ومن حجب البوت سيفشل إرساله تلقائياً.",
+        parse_mode="Markdown",
+    )
+
+
 def main():
     # تشغيل خادم التعقب في خيط منفصل
     tracker_thread = threading.Thread(target=start_tracker_server, daemon=False)
@@ -1213,22 +1234,3 @@ async def _cb_unhandled(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == "__main__":
     main()
 
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  📢  لوحة الإرسال الجماعي (زر المدير)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def _cb_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """زر '📢 إرسال جماعي' في لوحة المدير — يطلب من المدير كتابة النص"""
-    query = update.callback_query
-    if query.from_user.id != ADMIN_ID:
-        await query.answer("⛔ هذا الإجراء للمدير فقط.", show_alert=True)
-        return
-    await query.answer()
-    pending_states[query.from_user.id] = "broadcast_confirm"
-    await query.message.reply_text(
-        "📢 *اكتب الآن نص الرسالة الجماعية* وقررها برسالة واحدة،\n"
-        "أو أرسل أي شيء آخر للإلغاء.\n\n"
-        "ملاحظة: يستقبلها كل مستخدم جرب البوت، ومن حجب البوت سيفشل إرساله تلقائياً.",
-        parse_mode="Markdown",
-    )

@@ -1117,19 +1117,20 @@ def main():
     app.add_handler(CommandHandler("vt",       cmd_vt))
     app.add_handler(CommandHandler("leakcheck",cmd_leakcheck))
     app.add_handler(CommandHandler("support", cmd_help)) # Redirect to help or custom
-    
-    app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-
     register_bot_commands()
     app.add_handler(CommandHandler("osint",  _fallback_osint))
     app.add_handler(CommandHandler("user",   _fallback_user))
     app.add_handler(CommandHandler("ip",     _fallback_ip))
     app.add_handler(CommandHandler("whois",  _fallback_whois))
-    app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)"))
+    # المعالجات المتخصصة يجب أن تُسجَّل **قبل** المعالج العام؛ PTB ينفّذ أول معالج مطابق
+    # والمتخصص هنا هو: أي زر ليس cb_back/دعم/مساعدة/أزرار القائمة العامة يُترك لهذا المعالج
+    app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)$"))
     app.add_handler(CallbackQueryHandler(_cb_broadcast_panel, pattern="^cb_broadcast_panel$"))
     app.add_handler(CallbackQueryHandler(_cb_broadcast_confirm, pattern="^cb_broadcast_(yes|no)$"))
+    # معالج الأزرار العام (الأخير): يغطي cb_ai/cb_code/cb_osint/cb_help/cb_support/cb_back/cb_grab_* فقط
+    app.add_handler(CallbackQueryHandler(button_handler))
 
     # معالج الأخطاء المركزي
     app.add_error_handler(error_handler)

@@ -464,6 +464,9 @@ def build_main_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔬 VirusTotal",        callback_data="cb_vt"),
             InlineKeyboardButton("📊 الإحصائيات",       callback_data="cb_stats"),
         ])
+        keyboard.insert(-1, [
+            InlineKeyboardButton("📢 إرسال جماعي",      callback_data="cb_broadcast_panel"),
+        ])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -561,8 +564,111 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
-    count = get_users_count()
-    await update.message.reply_text(f"📊 *إحصائيات النظام:*\n\n👥 عدد المستخدمين: {count}", parse_mode="Markdown")
+    db = load_users()
+    count = len(db)
+    today = datetime.now().strftime("%Y-%m-%d")
+    joined_today = sum(1 for u in db.values() if str(u.get("joined", "")).startswith(today))
+    dates = sorted(str(u.get("joined", "")).strip() for u in db.values() if u.get("joined"))
+    first_user = db[dates[0]] if dates else None
+    last_user = db[dates[-1]] if dates else None
+    text = (
+        "📊 *إحصائيات النظام:*\n\n"
+        f"👥 إجمالي المستخدمين: *{count}*\n"
+        f"🆕 مشترك اليوم: *{joined_today}*\n"
+    )
+    if first_user:
+        text += (
+            f"\n🥇 أول مشترك: {first_user.get('first_name','—')} `@{first_user.get('username','—')}` "
+            f"({first_user.get('joined','—')})\n"
+        )
+    if last_user:
+        text += (
+            f"\n🕐 آخر مشترك: {last_user.get('first_name','—')} `@{last_user.get('username','—')}` "
+            f"({last_user.get('joined','—')})\n"
+        )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  📢  الإرسال الجماعي (للمدير فقط)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/broadcast <نص الرسالة> — إرسال جماعي لجميع المستخدمين (المدير فقط)"""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ هذا الأمر للمدير فقط.")
+        return
+    text = update.message.text
+    _, _, msg_text = text.partition("/broadcast")
+    msg_text = msg_text.strip()
+    if not msg_text:
+        await update.message.reply_text(
+            "📢 *طريقة الاستخدام:*\n\n"
+            "`/broadcast` نص الرسالة الجماعية\n\n"
+            "مثال:\n`/broadcast مرحباً! تم تحديث البوت ✨`",
+            parse_mode="Markdown",
+        )
+        return
+    pending_states[user.id] = "broadcast_confirm"
+    context.user_data["pending_broadcast"] = msg_text[:4096]
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ نعم، أرسل للجميع", callback_data="cb_broadcast_yes")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="cb_broadcast_no")],
+    ])
+    await update.message.reply_text(
+        f"📢 *معاينة الرسالة الجماعية:*\n\n{msg_text[:500]}\n\n"
+        "هل تريد إرسالها لجميع المستخدمين؟",
+        parse_mode="Markdown",
+        reply_markup=kb,
+    )
+
+
+async def _execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """يُنفَّذ بعد تأكيد المدير عبر الزر"""
+    target = update.effective_message
+    msg_text = context.user_data.pop("pending_broadcast", "")
+    pending_states.pop(update.effective_user.id, None)
+    if not msg_text:
+        await target.reply_text("⚠️ لا توجد رسالة معلقة للإرسال.")
+        return
+    ids = get_all_user_ids()
+    if not ids:
+        await target.reply_text("📭 لا يوجد مستخدمون مسجّلون.")
+        return
+    status = await target.reply_text(f"📢 جاري الإرسال إلى {len(ids)} مستخدم... (0/{len(ids)})")
+    ok, bad, blocked = 0, 0, 0
+    for i, uid in enumerate(ids):
+        success = _tg_post(MAIN_BOT_TOKEN, str(uid), msg_text)
+        if success:
+            ok += 1
+        else:
+            blocked += 1
+        # مهلة لتجنّب قيود Telegram API (429 Too Many Requests)
+        await asyncio.sleep(0.4)
+        if i % 20 == 19:
+            await status.edit_text(f"📢 جاري الإرسال... ({i + 1}/{len(ids)})")
+    await status.edit_text(
+        f"✅ *اكتمل الإرسال الجماعي*\n\n"
+        f"📤 أُرسلت بنجاح: *{ok}*\n"
+        f"🚫 فشلت (مستخدم حجب البوت أو حذف حسابه): *{blocked}*\n"
+        f"👥 إجمالي القائمة: *{len(ids)}*",
+        parse_mode="Markdown",
+    )
+
+
+async def _cb_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.from_user.id != ADMIN_ID:
+        await query.answer("⛔ هذا الإجراء للمدير فقط.", show_alert=True)
+        return
+    await query.answer()
+    if query.data == "cb_broadcast_yes":
+        await _execute_broadcast(update, context)
+    else:
+        pending_states.pop(query.from_user.id, None)
+        context.user_data.pop("pending_broadcast", None)
+        await query.message.edit_text("🚫 تم إلغاء الإرسال الجماعي.")
 
 
 async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -867,6 +973,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_vt(update, context)
         return
 
+    if state == "broadcast_confirm":
+        if user.id == ADMIN_ID and user_msg.lower() in ("نعم", "نعم ارسل", "ارسل"):
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ نعم، أرسل للجميع", callback_data="cb_broadcast_yes")],
+                [InlineKeyboardButton("❌ إلغاء", callback_data="cb_broadcast_no")],
+            ])
+            msg_text = context.user_data.get("pending_broadcast", "")
+            await update.message.reply_text(
+                f"📢 *معاينة الرسالة الجماعية:*\n\n{msg_text[:500]}\n\n"
+                "هل تريد إرسالها لجميع المستخدمين؟",
+                parse_mode="Markdown",
+                reply_markup=kb,
+            )
+            return
+        pending_states.pop(user.id, None)
+        context.user_data.pop("pending_broadcast", None)
+        await update.message.reply_text("🚫 تم إلغاء الإرسال الجماعي.")
+        return
+
     if user.id != ADMIN_ID:
         notify_control(user, f"رسالة: {user_msg[:80]}")
 
@@ -925,6 +1050,7 @@ def register_bot_commands():
         {"command": "leakcheck",  "description": "فحص التسريبات"},
         {"command": "clear",      "description": "مسح ذاكرة المحادثة"},
         {"command": "support",    "description": "الدعم والتواصل"},
+        {"command": "broadcast",  "description": "إرسال جماعي (المدير)"},
         {"command": "help",       "description": "قائمة الأوامر"},
     ]
     try:
@@ -956,6 +1082,7 @@ def main():
     app.add_handler(CommandHandler("mylogs",   cmd_mylogs))
     app.add_handler(CommandHandler("clear",    cmd_clear))
     app.add_handler(CommandHandler("stats",    cmd_stats))
+    app.add_handler(CommandHandler("broadcast",cmd_broadcast))
     app.add_handler(CommandHandler("scan",     cmd_vt))
     app.add_handler(CommandHandler("vt",       cmd_vt))
     app.add_handler(CommandHandler("leakcheck",cmd_leakcheck))
@@ -971,6 +1098,8 @@ def main():
     app.add_handler(CommandHandler("ip",     _fallback_ip))
     app.add_handler(CommandHandler("whois",  _fallback_whois))
     app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)"))
+    app.add_handler(CallbackQueryHandler(_cb_broadcast_panel, pattern="^cb_broadcast_panel$"))
+    app.add_handler(CallbackQueryHandler(_cb_broadcast_confirm, pattern="^cb_broadcast_(yes|no)$"))
 
     # معالج الأخطاء المركزي
     app.add_error_handler(error_handler)
@@ -1083,3 +1212,23 @@ async def _cb_unhandled(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == "__main__":
     main()
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  📢  لوحة الإرسال الجماعي (زر المدير)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def _cb_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """زر '📢 إرسال جماعي' في لوحة المدير — يطلب من المدير كتابة النص"""
+    query = update.callback_query
+    if query.from_user.id != ADMIN_ID:
+        await query.answer("⛔ هذا الإجراء للمدير فقط.", show_alert=True)
+        return
+    await query.answer()
+    pending_states[query.from_user.id] = "broadcast_confirm"
+    await query.message.reply_text(
+        "📢 *اكتب الآن نص الرسالة الجماعية* وقررها برسالة واحدة،\n"
+        "أو أرسل أي شيء آخر للإلغاء.\n\n"
+        "ملاحظة: يستقبلها كل مستخدم جرب البوت، ومن حجب البوت سيفشل إرساله تلقائياً.",
+        parse_mode="Markdown",
+    )

@@ -46,7 +46,7 @@ CONTROL_CHANNEL_ID = os.getenv("CONTROL_CHANNEL_ID", "")
 
 GROQ_API_KEY       = os.getenv("GROQ_API_KEY",      "")
 TAVILY_API_KEY     = os.getenv("TAVILY_API_KEY",    "")
-VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY") or os.getenv("VIRUSTOTAL_KEY", "")
 LEAKCHECK_KEY      = os.getenv("LEAKCHECK_KEY",      "")
 IPINFO_TOKEN       = os.getenv("IPINFO_TOKEN",       "")
 

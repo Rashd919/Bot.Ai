@@ -636,25 +636,32 @@ async def _execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not ids:
         await target.reply_text("📭 لا يوجد مستخدمون مسجّلون.")
         return
-    status = await target.reply_text(f"📢 جاري الإرسال إلى {len(ids)} مستخدم... (0/{len(ids)})")
-    ok, bad, blocked = 0, 0, 0
-    for i, uid in enumerate(ids):
-        success = _tg_post(MAIN_BOT_TOKEN, str(uid), msg_text)
-        if success:
-            ok += 1
-        else:
-            blocked += 1
-        # مهلة لتجنّب قيود Telegram API (429 Too Many Requests)
-        await asyncio.sleep(0.4)
-        if i % 20 == 19:
-            await status.edit_text(f"📢 جاري الإرسال... ({i + 1}/{len(ids)})")
-    await status.edit_text(
-        f"✅ *اكتمل الإرسال الجماعي*\n\n"
-        f"📤 أُرسلت بنجاح: *{ok}*\n"
-        f"🚫 فشلت (مستخدم حجب البوت أو حذف حسابه): *{blocked}*\n"
-        f"👥 إجمالي القائمة: *{len(ids)}*",
-        parse_mode="Markdown",
-    )
+    n = len(ids)
+    status = await target.reply_text(f"📢 جاري الإرسال إلى {n} مستخدم... (0/{n})")
+    ok, blocked = 0, 0
+    try:
+        for i, uid in enumerate(ids):
+            success = _tg_post(MAIN_BOT_TOKEN, str(uid), msg_text)
+            if success:
+                ok += 1
+            else:
+                blocked += 1
+            # مهلة لتجنّب قيود Telegram API (429 Too Many Requests)
+            await asyncio.sleep(0.4)
+            # تحديث الحالة كل 60 مستخدم أو عند الاكتمال (لحماية حد Telegram لتعديل الرسائل)
+            if i % 60 == 59 or i == n - 1:
+                await status.edit_text(f"📢 جاري الإرسال... ({i + 1}/{n})")
+        await status.edit_text(
+            f"✅ *اكتمل الإرسال الجماعي*\n\n"
+            f"📤 أُرسلت بنجاح: *{ok}*\n"
+            f"🚫 فشلت (مستخدم حجب البوت أو حذف حسابه): *{blocked}*\n"
+            f"👥 إجمالي القائمة: *{n}*",
+            parse_mode="Markdown",
+        )
+        print(f"[BROADCAST] ✅ تم: {ok} نجح، {blocked} فشل من {n}")
+    except Exception as e:
+        print(f"[BROADCAST] ❌ خطأ: {e}")
+        await status.edit_text(f"⚠️ حدث خطأ أثناء الإرسال: {e}")
 
 
 async def _cb_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -824,7 +831,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user  = query.from_user
     await query.answer()
     data  = query.data
-
+    # لا تمتص أزرار الإرسال الجماعي — معالجها المتخصص (cb_broadcast_confirm) هو من يعالجها
+    if data.startswith("cb_broadcast_"):
+        return
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")]])
 
     if data == "cb_support":

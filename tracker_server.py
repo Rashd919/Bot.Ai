@@ -554,6 +554,40 @@ def create_tracker_app():
         status["ts"] = time.time()
         return jsonify(status)
 
+    @app.route("/diag")
+    def diag():
+        """تشخيص مباشر: قراءة آخر التحديثات المعلقة عند تلغرام (بدون حذفها، timeout=0)
+        لمعرفة هل الرسائل تصل للبوت وما محتوياتها — أساسي لتتبع مشكلة 'لا رد'."""
+        try:
+            if not MAIN_BOT_TOKEN:
+                return jsonify({"ok": False, "error": "no token"})
+            r = requests.get(
+                f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/getUpdates?timeout=0&limit=10",
+                timeout=12,
+            )
+            data = r.json() if r.status_code == 200 else {}
+            if not data.get("ok"):
+                return jsonify({"ok": False, "http": r.status_code, "body": r.text[:300]})
+            updates = data.get("result", [])
+            out = []
+            for u in updates[-10:]:
+                entry = {"update_id": u.get("update_id")}
+                m = u.get("message") or u.get("edited_message") or {}
+                entry["message"] = {
+                    "id": m.get("message_id"),
+                    "date": m.get("date"),
+                    "text": m.get("text"),
+                    "from": {"id": m.get("from", {}).get("id"), "name": m.get("from", {}).get("first_name")},
+                    "chat": m.get("chat", {}).get("id"),
+                }
+                cb = u.get("callback_query")
+                if cb:
+                    entry["callback_query"] = {"data": cb.get("data"), "from_id": cb.get("from", {}).get("id")}
+                out.append(entry)
+            return jsonify({"ok": True, "count": len(updates), "updates": out})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)})
+
     @app.route("/ping")
     def ping():
         return jsonify({"status": "alive"}), 200

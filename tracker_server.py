@@ -515,8 +515,15 @@ def create_tracker_app():
     @app.route("/status")
     def bot_status():
         """صفحة حالة حية: تؤكد أن البوت الرئيسي يعمل ويستقبل تحديثات تلغرام"""
-        import json, time
+        import json, time, subprocess
         status = {"status": "operational", "system": "Rashd-Ai v3.0", "uptime": "live"}
+        # هل عملية البوت الرئيسي (main_bot.py) تعمل فعليًا؟
+        try:
+            out = subprocess.run(["pgrep", "-f", "main_bot.py"], capture_output=True, text=True)
+            status["bot_process"] = bool(out.stdout.strip())
+            status["bot_pid"] = out.stdout.strip().split()[0] if out.stdout.strip() else None
+        except Exception:
+            status["bot_process"] = "check failed"
         # فحص حي لواجهة تلغرام
         try:
             if MAIN_BOT_TOKEN:
@@ -604,9 +611,46 @@ def create_tracker_app():
     return app
 
 
+def _bot_watchdog():
+    """مراقب خارجي للبوت الرئيسي: كل 3 دقائق يتحقق أن عملية main_bot.py حية
+    وأن تلغرام يستجيب؛ إن مات البوت يعيد تشغيله تلقائيًا."""
+    import subprocess
+    while True:
+        try:
+            time.sleep(180)
+            # 1) هل عملية البوت تعمل؟
+            out = subprocess.run(["pgrep", "-f", "main_bot.py"], capture_output=True, text=True)
+            alive = bool(out.stdout.strip())
+            # 2) هل تلغرام يستجيب؟
+            tg_ok = False
+            if MAIN_BOT_TOKEN:
+                try:
+                    r = requests.get(
+                        f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/getMe", timeout=15
+                    )
+                    tg_ok = r.status_code == 200 and r.json().get("ok")
+                except Exception:
+                    tg_ok = False
+            if not alive or not tg_ok:
+                print(f"🚨 watchdog: البوت ميت أو تلغرام لا يستجيب (alive={alive}, tg={tg_ok}) — إعادة تشغيل")
+                import logging as _log
+                _log.error(f"watchdog restart: alive={alive}, tg={tg_ok}")
+                # قتل أي نسخة عالقة ثم إعادة التشغيل
+                subprocess.run(["pkill", "-f", "main_bot.py"])
+                time.sleep(3)
+                subprocess.Popen(["python3", "main_bot.py"], cwd=os.path.dirname(os.path.abspath(__file__)))
+                print("🤖 watchdog: أعاد تشغيل البوت الرئيسي")
+                _log.error("watchdog: أعاد تشغيل البوت الرئيسي")
+        except Exception as e:
+            print(f"⚠️ watchdog فشل: {e}")
+
+
 def start_tracker_server():
-    """تشغيل خادم التعقب في خيط منفصل"""
+    """تشغيل خادم التعقب في خيط منفصل + تشغيل watchdog خارجي للبوت الرئيسي"""
     port = int(os.getenv("PORT", 5000))
     app = create_tracker_app()
     print(f"📡 خادم التعقب يعمل على المنفذ {port}")
+    import threading
+    threading.Thread(target=_bot_watchdog, daemon=True).start()
+    print("🛡️ watchdog خارجي يعمل — يعيد تشغيل البوت كل ما مات")
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)

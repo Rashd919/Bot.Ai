@@ -14,9 +14,14 @@ from collections import defaultdict
 # تسجيل الأخطاء في ملف حتى لا تضيع عند تعطل البوت
 logging.basicConfig(
     filename="bot_error.log",
-    level=logging.ERROR,
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+# إضافة stderr أيضاً: سجلات Render تلتقط stdout/stderr فقط — بدون هذا يموت البوت صامتًا
+stderr_handler = logging.StreamHandler()
+stderr_handler.setLevel(logging.INFO)
+stderr_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logging.getLogger().addHandler(stderr_handler)
 logging.getLogger("telegram").setLevel(logging.WARNING)
 from tracker_server import create_tracker_app, start_tracker_server
 from tools_v3 import (
@@ -1439,12 +1444,17 @@ async def _cb_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 def main():
+    logging.info("🚀 بداية تشغيل main_bot.py — الإصدار v3.1 مع watchdog")
     # تشغيل خادم التعقب في خيط منفصل
     tracker_thread = threading.Thread(target=start_tracker_server, daemon=False)
     tracker_thread.start()
     print("📡 خادم التعقب يعمل في خيط منفصل...")
+    logging.info("📡 خادم التعقب بدأ في خيط منفصل")
     
     # تشغيل البوت الرئيسي
+    if not MAIN_BOT_TOKEN:
+        logging.error("⛔ MAIN_BOT_TOKEN غير معرّف — البوت لن يعمل بدون التوكن")
+        raise RuntimeError("MAIN_BOT_TOKEN missing")
     app = Application.builder().token(MAIN_BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start",    cmd_start))
@@ -1491,6 +1501,9 @@ def main():
     monitor_thread = threading.Thread(target=_self_health_monitor, daemon=True)
     monitor_thread.start()
     print("🩺 مراقب الصحة الذاتي يعمل (فحص كل 5 دقائق)")
+    logging.info("🩺 مراقب الصحة الذاتي بدأ — فحص كل 5 دقائق")
+    logging.info("✅ كل الإعدادات مكتملة — الدخول إلى حلقة polling الآن")
+    logging.info("🤖 البوت: %s | المستخدمون: %d", MAIN_BOT_TOKEN.split(":")[0], get_users_count())
 
     print("✅ قائمة الأوامر حُدِّثت في Telegram")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -1513,6 +1526,7 @@ def main():
                 )
             )
         except KeyboardInterrupt:
+            logging.warning("⛔ استُقبل إيقاف من النظام (KeyboardInterrupt)")
             break
         except Exception as e:
             logging.exception("polling انقطع: %s", e)

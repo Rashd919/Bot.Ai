@@ -539,6 +539,18 @@ def create_tracker_app():
                     status["registered_users"] = len(json.load(f))
         except Exception:
             pass
+        # التشخيص الحاسم: عدد التحديثات المعلقة عند تلغرام
+        # إذا كان العدد يتراكم ولا يتناقص → البوت لا يستلم الرسائل
+        try:
+            if MAIN_BOT_TOKEN:
+                r2 = requests.get(
+                    f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/getUpdates?timeout=0",
+                    timeout=10,
+                )
+                if r2.status_code == 200 and r2.json().get("ok"):
+                    status["pending_update_count"] = len(r2.json()["result"])
+        except Exception:
+            pass
         status["ts"] = time.time()
         return jsonify(status)
 

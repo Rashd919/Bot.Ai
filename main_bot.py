@@ -19,6 +19,13 @@ logging.basicConfig(
 )
 logging.getLogger("telegram").setLevel(logging.WARNING)
 from tracker_server import create_tracker_app, start_tracker_server
+from tools_v3 import (
+    HEADER, title_of, DIVIDER,
+    add_xp, get_user_stats, profile_card,
+    generate_password, password_strength, make_qr_image,
+    text_tools_report, age_report, game_start, game_guess,
+    schedule_reminder, daily_news_report,
+)
 
 from telegram import (
     Update,
@@ -452,6 +459,14 @@ def build_main_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🧹 مسح المحادثة",    callback_data="cb_clear"),
         ],
         [
+            InlineKeyboardButton("🧰 الأدوات",          callback_data="cb_tools"),
+            InlineKeyboardButton("🎮 لعبة التخمين",      callback_data="cb_play"),
+        ],
+        [
+            InlineKeyboardButton("📄 بطاقتي",           callback_data="cb_profile"),
+            InlineKeyboardButton("📰 أخبار اليوم",       callback_data="cb_news"),
+        ],
+        [
             InlineKeyboardButton("📞 الدعم",            callback_data="cb_support"),
             InlineKeyboardButton("ℹ️ المساعدة",         callback_data="cb_help"),
         ],
@@ -479,23 +494,27 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(user)
     notify_control(user, "بدء الاستخدام")
     
+    s = get_user_stats(user.id)
     welcome = (
-        "```\n"
-        "┌─────────────────────────────┐\n"
-        "│   🤖  راشد الاستخباراتي v2  │\n"
-        "└─────────────────────────────┘\n"
-        "```\n\n"
-        "👋 أهلاً بك في نظام راشد الاستخباراتي المتقدم!\n\n"
-        "🚀 *الميزات الرئيسية:*\n"
-        "• 🤖 ذكاء اصطناعي متقدم متصل بالإنترنت\n"
-        "• 🌐 بحث حي عبر الويب (Tavily)\n"
-        "• 🔍 تحليل وفحص شامل\n"
-        "• 📍 سحب بيانات IP والموقع الجغرافي\n"
-        "• 🛡️ فحص الروابط والملفات\n"
-        "• 💻 تحليل الأكواد البرمجية\n\n"
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃  ✦ 𝐑𝐚𝐬𝐡𝐞𝐝 𝐀𝐈 ✦      ┃\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        f"👋 أهلاً بك يا *{user.first_name}* في نظام راشد الاستخباراتي v3!\n"
+        f"🏅 *لقبك:* {s['title']}\n\n"
+        "🚀 *منظومة القدرات:*\n"
+        "┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅┅\n"
+        "🕵️ سحب روابط IP مع تعقب\n"
+        "🌐 تحليل IP + Whois نطاقات\n"
+        "🔍 بحث OSINT متعمق\n"
+        "🧪 فحص التسريبات + VirusTotal\n"
+        "🧰 أدوات ذكية: كلمات مرور، QR، Morse\n"
+        "🎮 ألعاب تحفزك ونقاط XP بمستويات\n\n"
+        "📄 *بطاقتك:* /profile\n"
+        "⚡ كلما استخدمت البوت كلما ارتفعت بمستواك!\n\n"
         "اختر من القائمة أدناه للبدء 👇"
     )
     
+    add_xp(user.id, 5)
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
@@ -505,22 +524,32 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   📖  قائمة الأوامر     │\n"
-        "└─────────────────────────┘\n"
-        "```\n"
-        "/start — تشغيل النظام\n"
-        "/osint — بحث OSINT\n"
-        "/user — بحث مستخدم\n"
-        "/ip — تحليل IP\n"
-        "/scan — فحص رابط\n"
-        "/whois — فحص Whois\n"
-        "/grab — رابط سحب IP\n"
-        "/mylogs — سجلاتي\n"
-        "/clear — مسح ذاكرة المحادثة\n"
-        "/support — الدعم والتواصل\n"
-        "/help — المساعدة"
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃   ℹ️  دليل النظام      ┃\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        "─ ✦ ───── *أوامر الاستخبارات* ───── ✦ ─\n"
+        "🕵️ /grab — رابط سحب IP\n"
+        "📋 /mylogs — سجلاتك\n"
+        "🔍 /osint — بحث استخباري\n"
+        "🌐 /ip — تحليل عنوان IP\n"
+        "📡 /whois — معلومات النطاق\n"
+        "🧪 /leakcheck — فحص التسريبات\n"
+        "🔬 /vt — فحص VirusTotal\n\n"
+        "─ ✦ ───── *الأدوات الذكية* ───── ✦ ─\n"
+        "🧰 /tools — صندوق الأدوات\n"
+        "🔑 /generate — كلمة مرور آمنة\n"
+        "🔒 /strong — فحص قوة كلمة المرور\n"
+        "📱 /qr — صانع QR Code\n"
+        "🧩 /texttools — Morse وBase64\n"
+        "🎂 /age — حاسبة العمر\n"
+        "🔢 /count — عداد النص\n"
+        "⏰ /remind — تذكير بعد دقائق\n"
+        "📰 /news — نشرة أخبار اليوم\n\n"
+        "─ ✦ ───── *حسابك* ───── ✦ ─\n"
+        "📄 /profile — بطاقتك ومستواك\n"
+        "🎮 /play — لعبة التخمين (+XP)\n"
+        "🧹 /clear — مسح الذاكرة\n\n"
+        "✦ راشد"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
@@ -792,35 +821,47 @@ SUPPORT_INFO = (
 
 BUTTON_RESPONSES = {
     "cb_ai": (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   🤖  الذكاء الاصطناعي  │\n"
-        "└─────────────────────────┘\n"
-        "```\n"
-        "أنا الآن في وضع الاستعداد. أرسل أي سؤال أو موضوع وسأجيبك فوراً مع البحث في الإنترنت إذا لزم الأمر."
+        f"{title_of('ai')}\n"
+        "أنا الآن في وضع الاستعداد. أرسل أي سؤال أو موضوع وسأجيبك فوراً مع البحث في الإنترنت إذا لزم الأمر.\n\n"
+        "⚡ +10 نقاط XP"
     ),
     "cb_code": (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   💻  تحليل الكود        │\n"
-        "└─────────────────────────┘\n"
-        "```\n"
+        f"{title_of('code')}\n"
         "أرسل الكود مباشرةً وسأقوم بـ:\n"
         "› شرح ما يفعله الكود\n"
         "› كشف الأخطاء والمشاكل\n"
         "› اقتراح تحسينات\n"
-        "› كتابة الكود المصحّح"
+        "› كتابة الكود المصحّح\n\n"
+        "⚡ +10 نقاط XP"
     ),
     "cb_osint": (
-        "```\n"
-        "┌─────────────────────────┐\n"
-        "│   🔍  بحث OSINT         │\n"
-        "└─────────────────────────┘\n"
-        "```\n"
+        f"{title_of('osint')}\n"
         "الأمر: /osint\n\n"
         "أو أرسل مباشرةً:\n`/osint اسم شخص أو موضوع`\n\n"
-        "يجمع معلومات من مصادر متعددة على الإنترنت."
+        "يجمع معلومات من مصادر متعددة على الإنترنت.\n"
+        "⚡ +10 نقاط XP"
     ),
+    "cb_tools": (
+        f"{title_of('tools')}\n"
+        "🔑 /generate — كلمة مرور آمنة فورية\n"
+        "🔒 /strong — فحص قوة كلمة المرور\n"
+        "📱 /qr — صانع QR Code\n"
+        "🧩 /texttools — تشفير Base64 + Morse\n"
+        "🎂 /age — حاسبة العمر\n"
+        "🔢 /count — عداد النص\n"
+        "⏰ /remind — تذكير بعد دقائق\n\n"
+        "اكتب الأمر مباشرةً وسيستجيب فوراً!\n"
+        "⚡ +10 نقاط XP لكل استخدام"
+    ),
+    "cb_play": (
+        f"{title_of('game')}\n"
+        "🎲 *لعبة تخمين الرقم*\n\n"
+        "اختر رقماً من 1 إلى 100\n"
+        "وكلما قلّت محاولاتك كلما ربحت نقاط XP أكثر!\n\n"
+        "ابدأ الآن: اكتب رقمك أو استخدم زر *العب* أدناه ⬇️",
+    ),
+    "cb_profile": None,
+    "cb_news": None,
     "cb_help": None,
     "cb_support": None,
 }
@@ -832,7 +873,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data  = query.data
     # لا تمتص أزرار الإرسال الجماعي — معالجها المتخصص (cb_broadcast_confirm) هو من يعالجها
-    if data.startswith("cb_broadcast_"):
+    if data in ("cb_tools_gen", "cb_tools_text", "cb_play_start"):
+        pass  # معالجوهما المتخصصون أدناه
+    elif data.startswith(("cb_broadcast_", "cb_tools_", "cb_play_")):
         return
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")]])
 
@@ -891,6 +934,67 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(msg, parse_mode="Markdown")
         pending_grabs.pop(user.id, None)
+        return
+
+    if data == "cb_profile":
+        card = profile_card(user, load_users())
+        await query.edit_message_text(card, parse_mode="Markdown", reply_markup=back_kb)
+        add_xp(user.id, 2)
+        return
+
+    if data == "cb_news":
+        typing_msg = await query.message.reply_text("📰 جارٍ تجهيز نشرة الأخبار...")
+        try:
+            report = daily_news_report()
+            await typing_msg.delete()
+            await query.edit_message_text(report, parse_mode="Markdown", reply_markup=back_kb)
+        except Exception:
+            await typing_msg.delete()
+            await query.edit_message_text("⚠️ تعذر جلب الأخبار الآن — أعد المحاولة بعد قليل.", reply_markup=back_kb)
+        add_xp(user.id, 5)
+        return
+
+    if data == "cb_tools":
+        tools_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔑 مولّد كلمات مرور", callback_data="cb_tools_gen")],
+            [InlineKeyboardButton("🧩 أدوات النصوص", callback_data="cb_tools_text")],
+            [InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")],
+        ])
+        await query.edit_message_text(BUTTON_RESPONSES["cb_tools"], parse_mode="Markdown", reply_markup=tools_kb)
+        return
+
+    if data == "cb_tools_gen":
+        pending_states[user.id] = "gen_pass"
+        await query.edit_message_text(
+            "🔑 *أرسل طول الكلمة* (8–64)، مثلاً: `16`\n\n"
+            "وإذا أردت تعقيداً أكبر أضف كلمة، مثلاً: `20 Rashd`",
+            parse_mode="Markdown",
+            reply_markup=back_kb,
+        )
+        return
+
+    if data == "cb_tools_text":
+        pending_states[user.id] = "texttools"
+        await query.edit_message_text(
+            "🧩 *أرسل النص* الذي تريد تحويله:\n\n"
+            "سأجيبك بتشفير Base64 + Morse + معكوس النص + العداد",
+            parse_mode="Markdown",
+            reply_markup=back_kb,
+        )
+        return
+
+    if data == "cb_play":
+        play_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎲 ابدأ اللعبة", callback_data="cb_play_start")],
+            [InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")],
+        ])
+        await query.edit_message_text(BUTTON_RESPONSES["cb_play"], parse_mode="Markdown", reply_markup=play_kb)
+        return
+
+    if data == "cb_play_start":
+        result = game_start(user.id)
+        add_xp(user.id, 3)
+        await query.edit_message_text(result, parse_mode="Markdown", reply_markup=back_kb)
         return
 
     response = BUTTON_RESPONSES.get(data)
@@ -982,6 +1086,81 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_vt(update, context)
         return
 
+    if state == "gen_pass":
+        try:
+            parts = user_msg.split()
+            length = int(parts[0]) if parts[0].isdigit() else 16
+        except Exception:
+            length = 16
+        pw = generate_password(length)
+        strength, advice = password_strength(pw)
+        add_xp(user.id, 10)
+        pending_states.pop(user.id, None)
+        await update.message.reply_text(
+            "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃  🔑  كلمتك السرية      ┃\n"
+            "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+            f"```\n{pw}\n```\n\n"
+            f"💪 *القوة:* {strength}\n"
+            f"💡 {advice}\n\n"
+            f"⚡ ربحت 10 نقاط XP\n"
+            f"{DIVIDER}\n✦ راشد",
+            parse_mode="Markdown",
+        )
+        return
+
+    if state == "texttools":
+        report = text_tools_report(user_msg)
+        add_xp(user.id, 10)
+        pending_states.pop(user.id, None)
+        await update.message.reply_text(report, parse_mode="Markdown")
+        return
+
+    if state == "age":
+        report = age_report(user_msg)
+        pending_states.pop(user.id, None)
+        if report is None:
+            await update.message.reply_text(
+                "⚠️ لم أتمكن من قراءة التاريخ. أرسله بهذا الشكل:\n`15/08/1999`\nأو `15-08-2000`",
+                parse_mode="Markdown",
+            )
+            return
+        add_xp(user.id, 10)
+        await update.message.reply_text(
+            "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃   🎂  حاسبة العمر      ┃\n"
+            "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+            f"{report}",
+            parse_mode="Markdown",
+        )
+        return
+
+    if state == "game":
+        result = game_guess(user.id, user_msg)
+        await update.message.reply_text(result, parse_mode="Markdown")
+        # لا تفرغ الحالة هنا — اللعبة تنتهي عند الفوز داخل game_guess
+        if "مبروك" in result:
+            pending_states.pop(user.id, None)
+        return
+
+    if state == "qr":
+        text = user_msg.strip()
+        if not text:
+            pending_states.pop(user.id, None)
+            await update.message.reply_text("⚠️ اكتب النص أو الرابط الذي تريد تحويله إلى QR:")
+            return
+        try:
+            buf = make_qr_image(text)
+            add_xp(user.id, 10)
+            pending_states.pop(user.id, None)
+            await update.message.reply_photo(
+                photo=buf, caption="📱 *QR Code جاهز!*\n⚡ +10 نقاط XP", parse_mode="Markdown",
+            )
+        except Exception:
+            pending_states.pop(user.id, None)
+            await update.message.reply_text("⚠️ تعذر توليد الصورة — أعد المحاولة.")
+        return
+
     if state == "broadcast_confirm":
         if user.id == ADMIN_ID and user_msg.lower() in ("نعم", "نعم ارسل", "ارسل"):
             kb = InlineKeyboardMarkup([
@@ -1004,13 +1183,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.id != ADMIN_ID:
         notify_control(user, f"رسالة: {user_msg[:80]}")
 
-    typing_msg = await update.message.reply_text("⏳ جاري المعالجة...")
-
+        typing_msg = await update.message.reply_text("⏳ جاري المعالجة...")
     if is_code_block(user_msg):
         reply = analyze_code(user_msg)
     else:
         reply = ask_groq(user.id, user_msg, use_internet=True)
-
+    add_xp(user.id, 10)
     await typing_msg.delete()
     await update.message.reply_text(reply, parse_mode="Markdown")
 
@@ -1060,6 +1238,17 @@ def register_bot_commands():
         {"command": "clear",      "description": "مسح ذاكرة المحادثة"},
         {"command": "support",    "description": "الدعم والتواصل"},
         {"command": "broadcast",  "description": "إرسال جماعي (المدير)"},
+        {"command": "profile",    "description": "بطاقتك ومستواك ونقاطك"},
+        {"command": "play",       "description": "لعبة تخمين الرقم (+XP)"},
+        {"command": "tools",      "description": "صندوق الأدوات الذكية"},
+        {"command": "generate",   "description": "كلمة مرور آمنة فورية"},
+        {"command": "strong",     "description": "فحص قوة كلمة المرور"},
+        {"command": "qr",         "description": "صانع QR Code"},
+        {"command": "texttools",  "description": "Base64 + Morse + عداد"},
+        {"command": "age",        "description": "حاسبة العمر"},
+        {"command": "count",      "description": "عدّاد النص"},
+        {"command": "remind",     "description": "تذكير بعد دقائق"},
+        {"command": "news",       "description": "نشرة أخبار اليوم"},
         {"command": "help",       "description": "قائمة الأوامر"},
     ]
     try:
@@ -1079,6 +1268,158 @@ def register_bot_commands():
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  📢  لوحة الإرسال الجماعي (زر المدير)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  🆕  أوامر الأدوات الذكية v3
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def cmd_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    card = profile_card(user, load_users())
+    add_xp(user.id, 2)
+    await update.message.reply_text(card, parse_mode="Markdown")
+
+async def cmd_generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    try:
+        length = int(context.args[0]) if context.args else 16
+    except Exception:
+        length = 16
+    pw = generate_password(length)
+    strength, advice = password_strength(pw)
+    add_xp(user.id, 10)
+    await update.message.reply_text(
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃  🔑  كلمتك السرية      ┃\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        f"```\n{pw}\n```\n\n"
+        f"💪 *القوة:* {strength}\n"
+        f"💡 {advice}\n\n"
+        f"⚡ +10 نقاط XP\n{DIVIDER}\n✦ راشد",
+        parse_mode="Markdown",
+    )
+
+async def cmd_strong(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    pw = " ".join(context.args) if context.args else ""
+    if not pw:
+        await update.message.reply_text("🔒 أرسل كلمة المرور بعد الأمر، مثلاً:\n`/strong MyPass2026!`", parse_mode="Markdown")
+        return
+    strength, advice = password_strength(pw)
+    await update.message.reply_text(
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃  🔒  فحص قوة كلمة المرور│\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        f"💪 *القوة:* {strength}\n💡 {advice}",
+        parse_mode="Markdown",
+    )
+
+async def cmd_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = " ".join(context.args) if context.args else ""
+    if not text:
+        pending_states[user.id] = "qr"
+        await update.message.reply_text("📱 *أرسل الآن النص أو الرابط* الذي تريد تحويله إلى QR Code:\n\nمثال: `https://example.com`", parse_mode="Markdown")
+        return
+    buf = make_qr_image(text)
+    add_xp(user.id, 10)
+    await update.message.reply_photo(
+        photo=buf, caption="📱 *QR Code جاهز!*\n⚡ +10 نقاط XP", parse_mode="Markdown",
+    )
+
+async def cmd_texttools(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = " ".join(context.args) if context.args else ""
+    if not text:
+        pending_states[user.id] = "texttools"
+        await update.message.reply_text("🧩 *أرسل النص* الذي تريد تحويله:\n\nسأجيبك بـ Base64 + Morse + معكوس النص + العداد", parse_mode="Markdown")
+        return
+    report = text_tools_report(text)
+    add_xp(user.id, 10)
+    await update.message.reply_text(report, parse_mode="Markdown")
+
+async def cmd_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = " ".join(context.args) if context.args else ""
+    if not text:
+        pending_states[user.id] = "age"
+        await update.message.reply_text("🎂 *أرسل تاريخ ميلادك* بهذا الشكل:\n`15/08/1999`\nأو `15-08-2000`", parse_mode="Markdown")
+        return
+    report = age_report(text)
+    if report is None:
+        await update.message.reply_text("⚠️ لم أتمكن من قراءة التاريخ. أرسله بهذا الشكل:\n`15/08/1999`", parse_mode="Markdown")
+        return
+    add_xp(user.id, 10)
+    await update.message.reply_text(
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃   🎂  حاسبة العمر      ┃\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        f"{report}",
+        parse_mode="Markdown",
+    )
+
+async def cmd_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    result = game_start(user.id)
+    pending_states[user.id] = "game"
+    add_xp(user.id, 3)
+    await update.message.reply_text(result, parse_mode="Markdown")
+
+async def cmd_remind(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    args = context.args or []
+    if not args or not args[0].isdigit():
+        await update.message.reply_text(
+            "⏰ *طريقة الاستخدام:*\n`/remind 10 اجتماع مع العميل`\n\n"
+            "رقم الدقائق (1–1440) ثم ملاحظة اختيارية.",
+            parse_mode="Markdown",
+        )
+        return
+    minutes = max(1, min(1440, int(args[0])))
+    note = " ".join(args[1:]) or "تذكير عام من راشد ⏰"
+    schedule_reminder(context.bot, user.id, minutes, note)
+    await update.message.reply_text(
+        f"✅ *تم ضبط التذكير!*\n\n"
+        f"⏰ بعد `{minutes} دقيقة`\n📌 {note[:100]}",
+        parse_mode="Markdown",
+    )
+
+async def cmd_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    typing_msg = await update.message.reply_text("📰 جارٍ تجهيز نشرة الأخبار...")
+    try:
+        report = daily_news_report()
+        await typing_msg.delete()
+        await update.message.reply_text(report, parse_mode="Markdown")
+    except Exception:
+        await typing_msg.delete()
+        await update.message.reply_text("⚠️ تعذر جلب الأخبار الآن — أعد المحاولة بعد قليل.")
+    add_xp(user.id, 5)
+
+async def cmd_tools(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    tools_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔑 مولّد كلمات مرور", callback_data="cb_tools_gen")],
+        [InlineKeyboardButton("🧩 أدوات النصوص", callback_data="cb_tools_text")],
+        [InlineKeyboardButton("↩️ رجوع", callback_data="cb_back")],
+    ])
+    await update.message.reply_text(
+        "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
+        "┃  🧰  صندوق الأدوات      ┃\n"
+        "┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        "🔑 /generate [طول] — كلمة مرور آمنة\n"
+        "🔒 /strong [كلمة] — فحص القوة\n"
+        "📱 /qr [نص] — صانع QR\n"
+        "🧩 /texttools [نص] — Base64 + Morse\n"
+        "🎂 /age [تاريخ] — حاسبة العمر\n"
+        "🔢 /count [نص] — عداد النص\n"
+        "⏰ /remind [دقائق] — تذكير\n"
+        "📰 /news — أخبار اليوم\n\n"
+        "أو اضغط زر أحد أدناه ⬇️",
+        parse_mode="Markdown",
+        reply_markup=tools_kb,
+    )
+
 
 async def _cb_broadcast_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """زر '📢 إرسال جماعي' في لوحة المدير — يطلب من المدير كتابة النص"""
@@ -1124,6 +1465,17 @@ def main():
     app.add_handler(CommandHandler("user",   _fallback_user))
     app.add_handler(CommandHandler("ip",     _fallback_ip))
     app.add_handler(CommandHandler("whois",  _fallback_whois))
+    app.add_handler(CommandHandler("profile",    cmd_profile))
+    app.add_handler(CommandHandler("play",       cmd_play))
+    app.add_handler(CommandHandler("tools",      cmd_tools))
+    app.add_handler(CommandHandler("generate",   cmd_generate))
+    app.add_handler(CommandHandler("strong",     cmd_strong))
+    app.add_handler(CommandHandler("qr",         cmd_qr))
+    app.add_handler(CommandHandler("texttools",  cmd_texttools))
+    app.add_handler(CommandHandler("age",        cmd_age))
+    app.add_handler(CommandHandler("count",      cmd_texttools))
+    app.add_handler(CommandHandler("remind",     cmd_remind))
+    app.add_handler(CommandHandler("news",       cmd_news))
     # المعالجات المتخصصة يجب أن تُسجَّل **قبل** المعالج العام؛ PTB ينفّذ أول معالج مطابق
     # والمتخصص هنا هو: أي زر ليس cb_back/دعم/مساعدة/أزرار القائمة العامة يُترك لهذا المعالج
     app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)$"))
@@ -1142,7 +1494,7 @@ def main():
 
     print("✅ قائمة الأوامر حُدِّثت في Telegram")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"⚡ راشد الاستخباراتي v2.1 — يعمل الآن")
+    print(f"⚡ راشد الاستخباراتي v3.0 — يعمل الآن")
     print(f"🤖 البوت: {MAIN_BOT_TOKEN.split(':')[0]}")
     print(f"👥 المستخدمون المسجّلون: {get_users_count()}")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

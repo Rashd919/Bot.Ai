@@ -23,14 +23,36 @@
 
 - [ ] تشخيص فشل زر "نعم، أرسل للجميع" (callback بعد المعاينة) — فحص سجلات Render وcallback handler
 - [ ] إصلاح السبب في main_bot.py ودفعه إلى GitHub
-- [ ] نشر الإصلاح على Render والتحقق من البناء النظيف
+- [x] نشر الإصلاح على Render والتحقق من البناء النظيف
 - [ ] اختبار حي كامل: /broadcast → معاينة → نعم → نجاح
 - [ ] إبلاغ المستخدم بالنتيجة
 
 # TODO — إصلاح أزرار القائمة الرئيسية (لا تستجيب إطلاقًا)
 
-- [ ] حصر كل قيم callback_data المستخدمة في الأزرار (build_main_keyboard + الأزرار الأخرى) ومقارنتها بما يغطيه button_handler وBUTTON_RESPONSES
-- [ ] إصلاح عدم التغطية (إضافة مسارات أو نقل handlers قبل button_handler)
-- [ ] نشر الإصلاح على Render والتحقق من البناء
+- [x] حصر كل قيم callback_data المستخدمة في الأزرار (build_main_keyboard + الأزرار الأخرى) ومقارنتها بما يغطيه button_handler وBUTTON_RESPONSES
+- [x] إصلاح عدم التغطية (إضافة مسارات أو نقل handlers قبل button_handler)
+- [x] نشر الإصلاح على Render والتحقق من البناء
 - [ ] اختبار حي لكل زر رئيسي (AI، كود، فحص رابط، IP، OSINT، grab، mylogs، clear، الدعم، المساعدة، إحصائيات، إرسال جماعي)
 - [ ] إبلاغ المستخدم
+
+# TODO — تطوير بوت راشد v3 (حزمة الترقية الكبرى)
+
+- [x] نظام XP ومستويات: دالة add_xp + حقول points/level/uses في users_db.json + get_user_stats (tools_v3.py)
+- [x] أمر /profile: بطاقة مستخدم جميلة (نقاط، مستوى، لقب، انضمام)
+- [x] مولّد كلمات مرور /generate مع حالة pending
+- [x] فحص قوة كلمة المرور /strong
+- [x] مولّد QR Code /qr (qrcode+PIL → صورة)
+- [x] لعبة تخمين الرقم /play مع حالة
+- [x] أدوات نص /texttools: Base64 encode/decode، Morse، عكس نص
+- [x] حاسبة العمر /age
+- [x] عداد النص /count
+- [x] تذكير /remind بعد X دقيقة (scheduler داخلي)
+- [x] أخبار اليوم /news من RSS عام (rss2json)
+- [x] تصميم فاخر: HEADER/ترويسة موحدة + فواصل مزخرفة، إزالة البوكسات القديمة من ردود الأزرار
+- [x] إعادة تصميم cmd_start بتصميم جديد فاخر
+- [x] توسيع build_main_keyboard (مجموعة أدوات + مجموعة ألعاب)
+- [x] تحديث setMyCommands بالأوامر الجديدة
+- [x] تسجيل handlers الجديدة قبل button_handler
+- [x] فحص syntax ورفع لـ GitHub ثم نشر على Render
+- [ ] اختبار حي لكل ميزة جديدة
+- [ ] دليل الاستخدام النهائي للمستخدم

@@ -512,6 +512,35 @@ def create_tracker_app():
     @app.route("/health")
     def health():
         return jsonify({"status": "operational", "system": "Rashd-Ai Tracker"})
+    @app.route("/status")
+    def bot_status():
+        """صفحة حالة حية: تؤكد أن البوت الرئيسي يعمل ويستقبل تحديثات تلغرام"""
+        import json, time
+        status = {"status": "operational", "system": "Rashd-Ai v3.0", "uptime": "live"}
+        # فحص حي لواجهة تلغرام
+        try:
+            if MAIN_BOT_TOKEN:
+                r = requests.get(f"https://api.telegram.org/bot{MAIN_BOT_TOKEN}/getMe", timeout=10)
+                if r.status_code == 200 and r.json().get("ok"):
+                    u = r.json()["result"]
+                    status["bot"] = f"@{u.get('username', 'N/A')}"
+                    status["telegram"] = "connected"
+                else:
+                    status["telegram"] = "error"
+            else:
+                status["telegram"] = "no token"
+        except Exception:
+            status["telegram"] = "unreachable"
+        # عدد المستخدمين المسجلين (users_db.json يشاركه البوت الرئيسي)
+        try:
+            users_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users_db.json")
+            if os.path.exists(users_path):
+                with open(users_path, "r", encoding="utf-8") as f:
+                    status["registered_users"] = len(json.load(f))
+        except Exception:
+            pass
+        status["ts"] = time.time()
+        return jsonify(status)
 
     @app.route("/ping")
     def ping():

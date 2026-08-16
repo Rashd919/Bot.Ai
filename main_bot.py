@@ -1514,6 +1514,9 @@ def main():
 
     # حلقة تشغيل مستقرة: عند أي تعطل يعيد الاتصال تلقائياً
     # timeout=60 يجلب تحديثات كل دقيقة — مفيد على الاستضافات المجانية التي توقف العمليات الخاملة
+    # retry_official=True: تتعامل مع تعارض 409 (نسخة أخرى من البوت) بإعادة المحاولة بدل الموت
+    # drop_pending_updates=True عند إعادة المحاولة فقط: نتخلى عن تحديثات قديمة مكدسة قد تسبب تعارضًا مستمرًا
+    _first_attempt = True
     while True:
         try:
             asyncio.run(
@@ -1522,16 +1525,21 @@ def main():
                     timeout=60,
                     bootstrap_retries=-1,
                     allowed_updates=Update.ALL_TYPES,
-                    drop_pending_updates=False,
+                    drop_pending_updates=not _first_attempt,
+                    retry_official=True,
                 )
             )
         except KeyboardInterrupt:
             logging.warning("⛔ استُقبل إيقاف من النظام (KeyboardInterrupt)")
             break
         except Exception as e:
+            err_text = str(e).lower()
+            _is_conflict = "conflict" in err_text
+            _wait = 60 if _is_conflict else 10
             logging.exception("polling انقطع: %s", e)
-            print(f"⚠️ انقطع الاتصال بـ polling: {e} — إعادة المحاولة بعد 10 ثوانٍ...")
-            time.sleep(10)
+            print(f"⚠️ انقطع الاتصال بـ polling: {e} — إعادة المحاولة بعد {_wait} ثانية{' (تعارض: هناك نسخة أخرى من البوت)' if _is_conflict else ''}...")
+            time.sleep(_wait)
+        _first_attempt = False
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

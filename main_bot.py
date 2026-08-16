@@ -1514,7 +1514,7 @@ def main():
 
     # حلقة تشغيل مستقرة: عند أي تعطل يعيد الاتصال تلقائياً
     # timeout=60 يجلب تحديثات كل دقيقة — مفيد على الاستضافات المجانية التي توقف العمليات الخاملة
-    # retry_official=True: تتعامل مع تعارض 409 (نسخة أخرى من البوت) بإعادة المحاولة بدل الموت
+    # حلقة while/except تعالج تعارض 409 (نسخة أخرى من البوت) بإعادة المحاولة بدل الموت
     # drop_pending_updates=True عند إعادة المحاولة فقط: نتخلى عن تحديثات قديمة مكدسة قد تسبب تعارضًا مستمرًا
     _first_attempt = True
     while True:
@@ -1526,7 +1526,6 @@ def main():
                     bootstrap_retries=-1,
                     allowed_updates=Update.ALL_TYPES,
                     drop_pending_updates=not _first_attempt,
-                    retry_official=True,
                 )
             )
         except KeyboardInterrupt:

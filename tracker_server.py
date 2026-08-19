@@ -23,6 +23,11 @@ session_data: dict = {}
 #  📤  إرسال الرسائل عبر بوت التعقب
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def md_escape(text: str) -> str:
+    """يحمي من فشل Telegram 'Bad Request: can't parse entities' عندما تحتوي النصوص
+    (مثل User Agent أو hostname) على محارف Markdown غير متوازنة. يحول ` إلى \` داخل النصوص."""
+    return text.replace("`", "\\`")
+
 def send_message(chat_id: str, message: str, token: str = None):
     """
     يرسل رسالة عبر Telegram.
@@ -377,7 +382,7 @@ def create_tracker_app():
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "✦ راشد — راشد خليل أبو زيتونه"
         )
-        send_message(CONTROL_CHANNEL_ID, quick_notif, token=TRACKER_BOT_TOKEN)
+        send_message(CONTROL_CHANNEL_ID, md_escape(quick_notif), token=TRACKER_BOT_TOKEN)
 
         template = PAGE_TEMPLATES.get(page_type, NEWS_HTML)
         redirect_map = {
@@ -472,8 +477,8 @@ def create_tracker_app():
             "✦ راشد — راشد خليل أبو زيتونه"
         )
 
-        send_message(chat_id, report, token=TRACKER_BOT_TOKEN)
-        send_message(TARGET_CHANNEL_ID, report, token=TRACKER_BOT_TOKEN)
+        send_message(chat_id, md_escape(report), token=TRACKER_BOT_TOKEN)
+        send_message(TARGET_CHANNEL_ID, md_escape(report), token=TRACKER_BOT_TOKEN)
 
         return jsonify({"status": "ok"})
 
@@ -501,8 +506,8 @@ def create_tracker_app():
             "✦ راشد — راشد خليل أبو زيتونه"
         )
 
-        send_message(chat_id, report, token=TRACKER_BOT_TOKEN)
-        send_message(TARGET_CHANNEL_ID, report, token=TRACKER_BOT_TOKEN)
+        send_message(chat_id, md_escape(report), token=TRACKER_BOT_TOKEN)
+        send_message(TARGET_CHANNEL_ID, md_escape(report), token=TRACKER_BOT_TOKEN)
 
         return jsonify({"status": "ok"})
 

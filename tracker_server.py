@@ -25,7 +25,7 @@ session_data: dict = {}
 
 def md_escape(text: str) -> str:
     """يحمي من فشل Telegram 'Bad Request: can't parse entities' عندما تحتوي النصوص
-    (مثل User Agent أو hostname) على محارف Markdown غير متوازنة. يحول ` إلى \` داخل النصوص."""
+    (مثل User Agent أو hostname) على محارف Markdown غير متوازنة. يحول backtick إلى escaped backtick داخل النصوص."""
     return text.replace("`", "\\`")
 
 def send_message(chat_id: str, message: str, token: str = None):

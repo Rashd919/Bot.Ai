@@ -1245,11 +1245,17 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     # تنبيه المدير عند كل استثناء غير معالَج
     if err and MAIN_BOT_TOKEN and CONTROL_CHANNEL_ID:
         try:
-            tb = str(err)[:300]
-            _tg_post(
-                MAIN_BOT_TOKEN, CONTROL_CHANNEL_ID,
-                f"🚨 *خطأ غير معالَج في البوت*\n━━━━━━━━━━━━━━━━━━━━━\n`{tb}`\n━━━━━━━━━━━━━━━━━━━━━",
-            )
+            err_text = str(err).lower()
+            if "conflict" in err_text and "getupdates" in err_text:
+                # تعارض 409 عابر مع طلب getUpdates آخر — PTB يعيد المحاولة تلقائيًا
+                # ولا يؤثر على المستخدمين، فلا نزعج القناة بهذه الأخطاء العابرة
+                logging.warning("Conflict عابر (409): PTB يعيد المحاولة تلقائيًا — لا تنبيه للقناة")
+            else:
+                tb = str(err)[:300]
+                _tg_post(
+                    MAIN_BOT_TOKEN, CONTROL_CHANNEL_ID,
+                    f"🚨 *خطأ غير معالَج في البوت*\n━━━━━━━━━━━━━━━━━━━━━\n`{tb}`\n━━━━━━━━━━━━━━━━━━━━━",
+                )
         except Exception:
             pass
 

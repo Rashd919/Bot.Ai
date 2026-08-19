@@ -522,7 +522,7 @@ def create_tracker_app():
     def bot_status():
         """صفحة حالة حية: تؤكد أن البوت الرئيسي يعمل ويستقبل تحديثات تلغرام"""
         import json, time, subprocess
-        status = {"status": "operational", "system": "Rashd-Ai v3.0", "uptime": "live"}
+        status = {"status": "operational", "system": "Rashd-Ai v3.1-723beaf", "uptime": "live"}
         # هل عملية البوت الرئيسي (main_bot.py) تعمل فعليًا؟
         try:
             out = subprocess.run(["pgrep", "-f", "main_bot.py"], capture_output=True, text=True)

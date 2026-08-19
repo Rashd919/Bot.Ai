@@ -602,9 +602,12 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = len(db)
     today = datetime.now().strftime("%Y-%m-%d")
     joined_today = sum(1 for u in db.values() if str(u.get("joined", "")).startswith(today))
-    dates = sorted(str(u.get("joined", "")).strip() for u in db.values() if u.get("joined"))
-    first_user = db[dates[0]] if dates else None
-    last_user = db[dates[-1]] if dates else None
+    # إيجاد أول وآخر مشترك عبر مفاتيح user_id الصحيحة (ليس تواريخ joined)
+    dated = [(uid, str(u.get("joined", ""))) for uid, u in db.items() if u.get("joined")]
+    first_uid = dated[0][0] if dated else None
+    last_uid = dated[-1][0] if dated else None
+    first_user = db.get(first_uid) if first_uid else None
+    last_user = db.get(last_uid) if last_uid else None
     text = (
         "📊 *إحصائيات النظام:*\n\n"
         f"👥 إجمالي المستخدمين: *{count}*\n"
@@ -1185,16 +1188,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 تم إلغاء الإرسال الجماعي.")
         return
 
+    typing_msg = None
     if user.id != ADMIN_ID:
         notify_control(user, f"رسالة: {user_msg[:80]}")
-
-        typing_msg = await update.message.reply_text("⏳ جاري المعالجة...")
+        try:
+            typing_msg = await update.message.reply_text("⏳ جاري المعالجة...")
+        except Exception:
+            pass
     if is_code_block(user_msg):
         reply = analyze_code(user_msg)
     else:
         reply = ask_groq(user.id, user_msg, use_internet=True)
     add_xp(user.id, 10)
-    await typing_msg.delete()
+    try:
+        if typing_msg:
+            await typing_msg.delete()
+    except Exception:
+        pass
     await update.message.reply_text(reply, parse_mode="Markdown")
 
 
@@ -1221,8 +1231,24 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logging.exception("استثناء غير معالَج: %s", err)
     if isinstance(update, Update) and update.effective_message:
         try:
-            await update.effective_message.reply_text(
-                "⚠️ حدث خطأ غير متوقع أثناء معالجة طلبك. أعد المحاولة."
+            from telegram.error import TelegramError
+            if isinstance(err, TelegramError):
+                await update.effective_message.reply_text(
+                    f"⚠️ تعذّر تنفيذ الطلب: {err.message}. أعد المحاولة."
+                )
+            else:
+                await update.effective_message.reply_text(
+                    "⚠️ حدث خطأ غير متوقع أثناء معالجة طلبك. أعد المحاولة."
+                )
+        except Exception:
+            pass
+    # تنبيه المدير عند كل استثناء غير معالَج
+    if err and MAIN_BOT_TOKEN and CONTROL_CHANNEL_ID:
+        try:
+            tb = str(err)[:300]
+            _tg_post(
+                MAIN_BOT_TOKEN, CONTROL_CHANNEL_ID,
+                f"🚨 *خطأ غير معالَج في البوت*\n━━━━━━━━━━━━━━━━━━━━━\n`{tb}`\n━━━━━━━━━━━━━━━━━━━━━",
             )
         except Exception:
             pass

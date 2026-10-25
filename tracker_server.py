@@ -620,5 +620,5 @@ def start_tracker_server():
     print(f"📡 خادم التعقب يعمل على المنفذ {port}")
     import threading
     threading.Thread(target=_bot_watchdog, daemon=True).start()
-    print("🛡️ watchdog خارجي يعمل — يعيد تشغيل البوت كل ما مات")
+    print("🛡️ watchdog خارجي يعمل — يراقب الصحة ويترك Render يدير إعادة التشغيل")
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)

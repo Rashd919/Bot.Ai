@@ -1103,6 +1103,9 @@ def is_code_block(text: str) -> bool:
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # بعض تحديثات Telegram لا تحتوي على message نصية؛ تجاهلها بأمان.
+    if not update or not update.message or not update.effective_user:
+        return
     user = update.effective_user
     user_msg = update.message.text or ""
 

@@ -58,6 +58,11 @@ def send_message(chat_id: str, message: str, token: str = None):
             if r.status_code == 200:
                 print(f"[TRACKER] ✅ تم الإرسال لـ {chat_id}")
                 return
+            if r.status_code == 400 and "parse_mode" in (r.text or ""):
+                retry = requests.post(f"https://api.telegram.org/bot{use_token}/sendMessage", json={"chat_id": chat_id, "text": message[:4096], "disable_web_page_preview": True}, timeout=10)
+                if retry.status_code == 200:
+                    print(f"[TRACKER] ✅ تم الإرسال كنص عادي لـ {chat_id}")
+                    return
             else:
                 print(f"[TRACKER] ⚠️ فشل إرسال لـ {chat_id} بـ token={use_token[:10]}...: {r.status_code} — {r.text[:80]}")
         except Exception as e:
@@ -565,7 +570,7 @@ def create_tracker_app():
     def root():
         return jsonify({
             "system":    "Rashd-Ai Intelligence System",
-            "version":   "2.0",
+            "version":   "3.1",
             "status":    "operational",
             "developer": "أبو سعود",
         })
@@ -574,9 +579,10 @@ def create_tracker_app():
 
 
 def _bot_watchdog():
-    """مراقب خارجي للبوت الرئيسي: كل 3 دقائق يتحقق أن عملية main_bot.py حية
-    وأن تلغرام يستجيب؛ إن مات البوت يعيد تشغيله تلقائيًا."""
+    """مراقب صحة محافظ: يطلب من Render إعادة تشغيل الخدمة بعد فشل متكرر.
+    لا ينشئ نسخة ثانية من main_bot.py حتى لا يحدث Telegram 409 Conflict."""
     import subprocess
+    consecutive_failures = 0
     while True:
         try:
             time.sleep(180)
@@ -594,15 +600,15 @@ def _bot_watchdog():
                 except Exception:
                     tg_ok = False
             if not alive or not tg_ok:
-                print(f"🚨 watchdog: البوت ميت أو تلغرام لا يستجيب (alive={alive}, tg={tg_ok}) — إعادة تشغيل")
+                consecutive_failures += 1
+                print(f"🚨 watchdog: فشل فحص الصحة {consecutive_failures}/3 (alive={alive}, tg={tg_ok})")
                 import logging as _log
-                _log.error(f"watchdog restart: alive={alive}, tg={tg_ok}")
-                # قتل أي نسخة عالقة ثم إعادة التشغيل
-                subprocess.run(["pkill", "-f", "main_bot.py"])
-                time.sleep(3)
-                subprocess.Popen(["python3", "main_bot.py"], cwd=os.path.dirname(os.path.abspath(__file__)))
-                print("🤖 watchdog: أعاد تشغيل البوت الرئيسي")
-                _log.error("watchdog: أعاد تشغيل البوت الرئيسي")
+                _log.warning("watchdog health failure %s/3", consecutive_failures)
+                if consecutive_failures >= 3:
+                    _log.error("watchdog: إنهاء الخدمة ليعيد Render تشغيلها — بدون إنشاء نسخة ثانية")
+                    os._exit(1)
+            else:
+                consecutive_failures = 0
         except Exception as e:
             print(f"⚠️ watchdog فشل: {e}")
 

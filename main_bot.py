@@ -22,6 +22,19 @@ stderr_handler = logging.StreamHandler()
 stderr_handler.setLevel(logging.INFO)
 stderr_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logging.getLogger().addHandler(stderr_handler)
+
+class _SecretRedactor(logging.Filter):
+    def filter(self, record):
+        msg = str(record.getMessage())
+        for secret in (os.getenv("MAIN_BOT_TOKEN", ""), os.getenv("TRACKER_BOT_TOKEN", "")):
+            if secret:
+                msg = msg.replace(secret, "<telegram-token-redacted>")
+        record.msg = msg
+        record.args = ()
+        return True
+
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_SecretRedactor())
 logging.getLogger("telegram").setLevel(logging.WARNING)
 from tracker_server import create_tracker_app, start_tracker_server
 from tools_v3 import (
@@ -527,6 +540,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    support_kb = InlineKeyboardMarkup([[InlineKeyboardButton("💬 واتساب", url="https://wa.me/962775866283")]])
+    await update.message.reply_text(SUPPORT_INFO, parse_mode="Markdown", reply_markup=support_kb)
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "┏━━━━━━━━━━━━━━━━━━━━━━┓\n"
@@ -728,12 +746,7 @@ async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("🔬 جاري فحص الرابط عبر VirusTotal...")
     try:
         # 1. Submit URL
-        r = requests.post(
-            "https://www.virustotal.com/api/v3/urls",
-            headers={"x-apikey": VIRUSTOTAL_API_KEY},
-            data={"url": url},
-            timeout=15
-        )
+        r = await asyncio.to_thread(requests.post, "https://www.virustotal.com/api/v3/urls", headers={"x-apikey": VIRUSTOTAL_API_KEY}, data={"url": url}, timeout=15)
         if r.status_code != 200:
             await msg.edit_text(f"⚠️ خطأ في VirusTotal: {r.status_code}")
             return
@@ -741,12 +754,8 @@ async def cmd_vt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analysis_id = r.json()["data"]["id"]
         
         # 2. Get Report (Wait a bit)
-        time.sleep(2)
-        r = requests.get(
-            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
-            headers={"x-apikey": VIRUSTOTAL_API_KEY},
-            timeout=15
-        )
+        await asyncio.sleep(2)
+        r = await asyncio.to_thread(requests.get, f"https://www.virustotal.com/api/v3/analyses/{analysis_id}", headers={"x-apikey": VIRUSTOTAL_API_KEY}, timeout=15)
         if r.status_code == 200:
             stats = r.json()["data"]["attributes"]["stats"]
             res = (
@@ -781,10 +790,7 @@ async def cmd_leakcheck(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("🔍 جاري فحص التسريبات...")
     try:
-        r = requests.get(
-            f"https://leakcheck.io/api/v2/query/{query}?key={LEAKCHECK_KEY}",
-            timeout=15
-        )
+        r = await asyncio.to_thread(requests.get, f"https://leakcheck.io/api/v2/query/{query}?key={LEAKCHECK_KEY}", timeout=15)
         if r.status_code == 200:
             data = r.json()
             if data.get("success") and data.get("found", 0) > 0:
@@ -1003,6 +1009,61 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = game_start(user.id)
         add_xp(user.id, 3)
         await query.edit_message_text(result, parse_mode="Markdown", reply_markup=back_kb)
+        return
+
+    if data == "cb_grab":
+        grab_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📰 صفحة إخبارية", callback_data="cb_grab_news")],
+            [InlineKeyboardButton("📥 تحميل ملف", callback_data="cb_grab_download")],
+            [InlineKeyboardButton("🤖 توجيه للبوت", callback_data="cb_grab_bot")],
+            [InlineKeyboardButton("🔒 تحقق أمني", callback_data="cb_grab_verify")],
+        ])
+        pending_grabs[user.id] = "رابط عام"
+        await query.edit_message_text("🕵️ اختر نوع الصفحة التي سيراها الزائر:", reply_markup=grab_kb)
+        return
+    if data == "cb_mylogs":
+        logs = user_logs.get(user.id, [])
+        if not logs:
+            await query.edit_message_text("📭 ليس لديك أي روابط نشطة حالياً.", reply_markup=back_kb)
+            return
+        text = "📋 *سجلات روابطك النشطة:*\n\n"
+        for i, log in enumerate(logs, 1):
+            text += f"{i}▪ *{log['label']}*\n   🔗 `{log['url']}`\n   📅 {log['timestamp']}\n\n"
+        await query.edit_message_text(text[:4096], parse_mode="Markdown", reply_markup=back_kb)
+        return
+    if data == "cb_clear":
+        chat_history[user.id] = []
+        await query.edit_message_text("🧹 تم مسح ذاكرة المحادثة بنجاح.", reply_markup=back_kb)
+        return
+    if data == "cb_stats":
+        if user.id != ADMIN_ID:
+            await query.answer("⛔ هذا الإجراء للمدير فقط.", show_alert=True)
+            return
+        db = load_users()
+        today = datetime.now().strftime("%Y-%m-%d")
+        joined_today = sum(1 for u in db.values() if str(u.get("joined", "")).startswith(today))
+        dated = sorted(((str(u.get("joined", "")), u) for u in db.values() if u.get("joined")), key=lambda x: x[0])
+        text = f"📊 *إحصائيات النظام:*\n\n👥 إجمالي المستخدمين: *{len(db)}*\n🆕 مشترك اليوم: *{joined_today}*"
+        if dated:
+            text += f"\n\n🥇 أول مشترك: {dated[0][1].get('first_name','—')} ({dated[0][0]})"
+            text += f"\n🕐 آخر مشترك: {dated[-1][1].get('first_name','—')} ({dated[-1][0]})"
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_kb)
+        return
+    if data in ("cb_scan", "cb_vt"):
+        pending_states[user.id] = "vt"
+        await query.edit_message_text("🔬 أرسل الرابط الذي تريد فحصه أمنياً:", reply_markup=back_kb)
+        return
+    if data == "cb_ip":
+        pending_states[user.id] = "ip_state"
+        await query.edit_message_text("🌐 أرسل عنوان الـ IP لتحليله:", reply_markup=back_kb)
+        return
+    if data in ("cb_user", "cb_osint", "cb_whois"):
+        pending_states[user.id] = "osint"
+        await query.edit_message_text("🔍 أرسل اسم المستخدم أو النطاق أو الموضوع للبحث عنه:", reply_markup=back_kb)
+        return
+    if data == "cb_leakcheck":
+        pending_states[user.id] = "leakcheck"
+        await query.edit_message_text("🔍 أرسل البريد أو الرقم لفحص التسريبات:", reply_markup=back_kb)
         return
 
     response = BUTTON_RESPONSES.get(data)
@@ -1499,7 +1560,7 @@ def main():
     app.add_handler(CommandHandler("scan",     cmd_vt))
     app.add_handler(CommandHandler("vt",       cmd_vt))
     app.add_handler(CommandHandler("leakcheck",cmd_leakcheck))
-    app.add_handler(CommandHandler("support", cmd_help)) # Redirect to help or custom
+    app.add_handler(CommandHandler("support", cmd_support))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     register_bot_commands()
@@ -1520,7 +1581,7 @@ def main():
     app.add_handler(CommandHandler("news",       cmd_news))
     # المعالجات المتخصصة يجب أن تُسجَّل **قبل** المعالج العام؛ PTB ينفّذ أول معالج مطابق
     # والمتخصص هنا هو: أي زر ليس cb_back/دعم/مساعدة/أزرار القائمة العامة يُترك لهذا المعالج
-    app.add_handler(CallbackQueryHandler(_cb_unhandled, pattern="^cb_(scan|ip|user|whois|leakcheck|mylogs|clear|vt|stats|grab)$"))
+    # All regular menu callbacks are handled by button_handler below.
     app.add_handler(CallbackQueryHandler(_cb_broadcast_panel, pattern="^cb_broadcast_panel$"))
     app.add_handler(CallbackQueryHandler(_cb_broadcast_confirm, pattern="^cb_broadcast_(yes|no)$"))
     # معالج الأزرار العام (الأخير): يغطي cb_ai/cb_code/cb_osint/cb_help/cb_support/cb_back/cb_grab_* فقط
@@ -1602,22 +1663,14 @@ def _self_health_monitor():
 async def _fallback_osint(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args) if context.args else ""
     if not query:
-        await update.message.reply_text(
-            "👤 أرسل اسم المستخدم أو الشخص للبحث عنه:\n`/osint اسم الشخص`",
-            parse_mode="Markdown",
-        )
+        await update.message.reply_text("👤 أرسل اسم المستخدم أو الشخص للبحث عنه:\n`/osint اسم الشخص`", parse_mode="Markdown")
         return
-    pending_states[update.effective_user.id] = "osint"
-    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+    msg = await update.message.reply_text("🔍 جاري البحث...")
+    await msg.edit_text(cmd_osint_search(query), parse_mode="Markdown", disable_web_page_preview=True)
 
 
 async def _fallback_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = " ".join(context.args) if context.args else ""
-    if not query:
-        await update.message.reply_text("👤 أرسل اسم المستخدم أو الشخص للبحث عنه:\n`/user اسم الشخص`", parse_mode="Markdown")
-        return
-    pending_states[update.effective_user.id] = "osint"
-    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+    return await _fallback_osint(update, context)
 
 
 async def _fallback_ip(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1630,12 +1683,12 @@ async def _fallback_ip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _fallback_whois(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    domain = context.args[0] if context.args else ""
-    if not domain:
+    query = context.args[0] if context.args else ""
+    if not query:
         await update.message.reply_text("🔎 أرسل النطاق:\n`/whois example.com`", parse_mode="Markdown")
         return
-    pending_states[update.effective_user.id] = "osint"
-    await update.message.reply_text("🔍 ابحث مباشرة الآن:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ إلغاء", callback_data="cb_back")]]))
+    msg = await update.message.reply_text("🔍 جاري البحث عن النطاق...")
+    await msg.edit_text(cmd_osint_search(query), parse_mode="Markdown", disable_web_page_preview=True)
 
 
 async def _cb_unhandled(update: Update, context: ContextTypes.DEFAULT_TYPE):

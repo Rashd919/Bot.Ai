@@ -7,6 +7,7 @@ import json
 import math
 import base64
 import random
+import secrets
 import string
 import threading
 import requests
@@ -118,7 +119,7 @@ def title_of(key: str) -> str:
 def generate_password(length: int = 16, extra_chars: str = "") -> str:
     length = max(8, min(64, int(length or 16)))
     chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]" + extra_chars
-    return ''.join(random.choice(chars) for _ in range(length))
+    return ''.join(secrets.choice(chars) for _ in range(length))
 
 def password_strength(pw: str) -> tuple[str, str]:
     score = 0
@@ -242,6 +243,8 @@ def game_guess(user_id: int, text: str) -> str:
     if not m:
         return "⚠️ أرسل رقماً فقط من 1 إلى 100."
     g = int(m.group())
+    if not 1 <= g <= 100:
+        return "⚠️ أرسل رقماً بين 1 و100."
     if user_id not in GAMES:
         return "⚠️ ابدأ لعبة جديدة أولاً: /play"
     game = GAMES[user_id]
@@ -322,7 +325,7 @@ def daily_news_report(category: str = "technology") -> str:
         out += f"{i}▪ *{title}*\n"
         if desc:
             out += f"   ↳ {desc}...\n"
-        out += f"   🔗 [اقرأ]{link}\n\n"
+        out += f"   🔗 [اقرأ]({link})\n\n"
     out += "━━━━━━━━━━━━━━━━━━━━━\n✦ راشد"
     return out
 

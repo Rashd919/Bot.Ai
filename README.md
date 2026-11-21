@@ -1,57 +1,65 @@
-# Rashd AI Intelligence System 🤖
+# RASHED AI — كوتشك الذكي عبر Telegram
 
-نظام استخبارات متطور يعتمد على بوتين منفصلين لتتبع البيانات وتقديم خدمات الذكاء الاصطناعي.
+بوت Telegram عربي للتدريب والتغذية والمتابعة، مبني ليكون كوتشًا ذكيًا ودودًا للبالغين. يحفظ هدف المستخدم وخطته وسجل تمارينه، ويقدّم إرشادات عامة قابلة للتعديل مع قواعد سلامة واضحة.
 
-## 🚀 الميزات الرئيسية
+> RASHED AI ذكاء اصطناعي وليس طبيبًا أو مدربًا بشريًا معتمدًا. النصائح عامة وليست تشخيصًا أو علاجًا، ولا توجد وعود مضمونة بالنتائج.
 
-1.  **Rashd IP Tracker Bot:**
-    *   سحب عنوان الـ IP والـ GPS للزوار.
-    *   إرسال النتائج فوراً إلى القناة المخصصة.
-    *   نظام تمويه (Camouflage) يحول الزائر لصفحة 404 بعد سحب البيانات.
-    *   خادم Flask مدمج لضمان التشغيل المستمر (Uptime).
+## ما الذي يقدمه؟
 
-2.  **Rashid Thunder Bot:**
-    *   مساعد ذكي يعتمد على نموذج Llama 3 (Groq).
-    *   البحث المتقدم في الويب (Tavily).
-    *   فحص تسريبات البيانات (DeHashed).
-    *   فحص الروابط والملفات (VirusTotal).
-    *   **نظام مراقبة المسؤول:** إشعارات فورية للمسؤول عن أي نشاط من مستخدمين آخرين.
+- تقييم أولي متدرّج: الهدف، الخبرة، الأيام، مدة الحصة، المكان والمعدات.
+- خطة تدريب منظمة قابلة للتعديل مع بدائل للتمارين.
+- تسجيل التمرين والجهد والألم أو الانزعاج.
+- ملف مستخدم دائم وخطة وسجل تقدم باستخدام SQLite.
+- مراجعة أسبوعية بسيطة.
+- أوامر واضحة لتعديل الملف أو حذف البيانات.
+- واجهة أزرار عربية مناسبة للهاتف.
+- خادم صحة `/status` متوافق مع Render.
+- لا يوجد GPS أو روابط سحب أو جمع خفي لبيانات الزوار.
 
-## 🛠 الإعداد والتشغيل
+## التشغيل محليًا
 
-### 1. المتطلبات
-*   Python 3.10+
-*   تثبيت المكتبات المطلوبة:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-### 2. إعداد المفاتيح (Secrets)
-قم بإنشاء ملف باسم `.env` في المجلد الرئيسي للمشروع (استخدم `.env.example` كدليل) وضع فيه المفاتيح التالية:
-
-```env
-TRACKER_BOT_TOKEN=
-MAIN_BOT_TOKEN=
-GROQ_API_KEY=your_groq_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here
-IPINFO_TOKEN=your_ipinfo_token_here
-DEHASHED_API_KEY=your_dehashed_api_key_here
-VIRUSTOTAL_API_KEY=your_virustotal_api_key_here
-ADMIN_ID=
-CHANNEL_ID=-
-```
-
-### 3. التشغيل
-يمكنك تشغيل البوتين معاً باستخدام الملف التنفيذي:
 ```bash
-chmod +x run.sh
-./run.sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export MAIN_BOT_TOKEN="توكن البوت"
+export ADMIN_ID="معرّف المدير"
+python3 main_bot.py
 ```
 
-## 🔒 السرية والأمان
-*   تمت إضافة ملف `.gitignore` لمنع رفع ملف `.env` الحقيقي إلى GitHub.
-*   لا تشارك ملف `.env` الخاص بك مع أي شخص.
-*   استخدم `UptimeRobot` لمراقبة الرابط الرئيسي لضمان بقاء البوت يعمل 24/7.
+اختياريًا، يمكن تفعيل المحادثة الحرة للكوتش عبر:
 
----
-تم التطوير بواسطة **ابو_سعود** 🤖
+```bash
+export GROQ_API_KEY="مفتاح Groq"
+```
+
+## أوامر Telegram
+
+```text
+/start
+/assessment
+/profile
+/my_plan
+/log_workout
+/progress
+/weekly_review
+/edit
+/delete_data
+/help
+```
+
+## النشر على Render
+
+استخدم Web Service مع أمر التشغيل الموجود في `Procfile`:
+
+```text
+web: python3 main_bot.py
+```
+
+أضف `MAIN_BOT_TOKEN` و`ADMIN_ID` كـ Secrets في Render. لا تضع أي توكن داخل GitHub أو ملفات الكود. قاعدة SQLite مناسبة كبداية، لكن عند زيادة المستخدمين ينبغي نقلها إلى PostgreSQL أو خدمة تخزين دائمة.
+
+## الاختبارات المحلية
+
+```bash
+python3 -m py_compile main_bot.py coach_data.py coach_logic.py
+```

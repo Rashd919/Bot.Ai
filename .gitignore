@@ -16,3 +16,4 @@ replit.nix
 .local/
 .config/
 *.log
+rashd_coach.db

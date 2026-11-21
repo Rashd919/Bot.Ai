@@ -1,4 +1,4 @@
-"""RASHED AI Telegram coach — MVP replacement for the legacy OSINT bot."""
+"""RASHED AI Telegram coach — Arabic, friendly and safety-first fitness guidance."""
 from __future__ import annotations
 
 import asyncio
@@ -63,10 +63,10 @@ def back_menu(user_id: int) -> InlineKeyboardMarkup:
 
 def welcome(user) -> str:
     return (
-        f"<b>مرحبًا {esc(user.first_name)}، أنا RASHED AI ✦</b>\n\n"
-        "أنا كوتشك الذكي للتدريب والتغذية والمتابعة. أساعدك تبني عادة واقعية، وأتذكر هدفك وخطتك وسجلك بين المحادثات.\n\n"
+        f"<b>يا هلا {esc(user.first_name)}، أنا RASHED AI ✦</b>\n\n"
+        "أنا كوتشك الذكي وصاحبك بالتدريب والتغذية. بحكي معك ببساطة وبصراحة، وبساعدك تبني خطة واقعية وأتابع تقدمك بدون تعقيد أو وعود وهمية.\n\n"
         "<b>مهم:</b> أنا ذكاء اصطناعي ولست طبيبًا أو مدربًا بشريًا معتمدًا. نصائحي عامة وليست تشخيصًا أو علاجًا، ولا أتعامل مع الحالات الطبية المعقدة بدل المختص.\n\n"
-        "يمكنك تعديل بياناتك أو حذفها متى شئت من داخل البوت. ابدأ بالتقييم حتى أصمم لك خطة مناسبة."
+        "كلما كانت معلوماتك أدق — العمر والطول والوزن والهدف — كانت الخطة والتغذية أنسب. ابدأ بالتقييم وأنا بمشي معك خطوة خطوة."
     )
 
 
@@ -90,7 +90,7 @@ async def begin_assessment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(user)
     drafts[user.id] = {"preferred_name": user.first_name or ""}
     set_state(user.id, "name")
-    await update.effective_message.reply_text("<b>التقييم 1/8</b>\nشو بتحب أناديك؟ يمكنك كتابة اسم مختصر أو اسم مستعار.", parse_mode="HTML")
+    await update.effective_message.reply_text("<b>التقييم 1/11</b>\nشو بتحب أناديك؟ اكتب اسمًا مختصرًا أو اسمًا مستعارًا.", parse_mode="HTML")
 
 
 async def cmd_assessment(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -161,42 +161,80 @@ async def handle_assessment_text(update: Update, state: str, text: str):
     if state == "name":
         draft["preferred_name"] = text[:120]
         set_state(uid, "goal")
-        await update.effective_message.reply_text("<b>التقييم 2/8</b>\nما هدفك الأساسي؟\n\nاكتب: بناء عضلات، خسارة دهون، زيادة القوة، أو لياقة عامة.", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 2/11</b>\nشو هدفك الأساسي؟\n\nاكتب: بناء عضلات، خسارة دهون، زيادة القوة، أو لياقة عامة.", parse_mode="HTML")
     elif state == "goal":
         draft["goal"] = text[:80]
         set_state(uid, "experience")
-        await update.effective_message.reply_text("<b>التقييم 3/8</b>\nما مستواك؟ مبتدئ، متوسط، أم متقدم؟", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 3/11</b>\nشو مستواك؟ مبتدئ، متوسط، ولا متقدم؟", parse_mode="HTML")
     elif state == "experience":
         draft["experience"] = text[:40]
+        set_state(uid, "age")
+        await update.effective_message.reply_text("<b>التقييم 4/11</b>\nكم عمرك؟ اكتب رقمًا بين 13 و90. إذا ما بتحب تجاوب، اكتب: تخطي.", parse_mode="HTML")
+    elif state == "age":
+        if text.lower() in ("تخطي", "skip"):
+            draft["age"] = None
+        elif not text.isdigit() or not 13 <= int(text) <= 90:
+            await update.effective_message.reply_text("اكتب عمرًا صحيحًا بين 13 و90، أو اكتب: تخطي.")
+            return
+        else:
+            draft["age"] = int(text)
+        set_state(uid, "height")
+        await update.effective_message.reply_text("<b>التقييم 5/11</b>\nقديش طولك بالسنتيمتر؟ مثال: 178. اكتب تخطي إذا ما بدك تحسب التغذية بالقياسات.", parse_mode="HTML")
+    elif state == "height":
+        if text.lower() in ("تخطي", "skip"):
+            draft["height_cm"] = None
+        else:
+            try:
+                value = float(text.replace(",", "."))
+            except ValueError:
+                value = 0
+            if not 100 <= value <= 230:
+                await update.effective_message.reply_text("اكتب طولًا بين 100 و230 سم، أو اكتب: تخطي.")
+                return
+            draft["height_cm"] = value
+        set_state(uid, "weight")
+        await update.effective_message.reply_text("<b>التقييم 6/11</b>\nقديش وزنك بالكيلو؟ مثال: 82.5. اكتب تخطي إذا ما بدك تجاوب.", parse_mode="HTML")
+    elif state == "weight":
+        if text.lower() in ("تخطي", "skip"):
+            draft["weight_kg"] = None
+        else:
+            try:
+                value = float(text.replace(",", "."))
+            except ValueError:
+                value = 0
+            if not 30 <= value <= 300:
+                await update.effective_message.reply_text("اكتب وزنًا بين 30 و300 كغ، أو اكتب: تخطي.")
+                return
+            draft["weight_kg"] = value
         set_state(uid, "days")
-        await update.effective_message.reply_text("<b>التقييم 4/8</b>\nكم يوم تستطيع التدريب أسبوعيًا؟ أرسل رقمًا من 1 إلى 7.", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 7/11</b>\nكم يوم بتقدر تتمرن بالأسبوع؟ أرسل رقمًا من 1 إلى 7.", parse_mode="HTML")
     elif state == "days":
         if not text.isdigit() or not 1 <= int(text) <= 7:
             await update.effective_message.reply_text("أرسل رقمًا من 1 إلى 7 فقط.")
             return
         draft["days_per_week"] = int(text)
         set_state(uid, "minutes")
-        await update.effective_message.reply_text("<b>التقييم 5/8</b>\nكم دقيقة تناسبك في الحصة؟ أرسل رقمًا بين 15 و180.", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 8/11</b>\nكم دقيقة بتناسبك الحصة؟ أرسل رقمًا بين 15 و180.", parse_mode="HTML")
     elif state == "minutes":
         if not text.isdigit() or not 15 <= int(text) <= 180:
             await update.effective_message.reply_text("أرسل عدد دقائق بين 15 و180.")
             return
         draft["session_minutes"] = int(text)
         set_state(uid, "place")
-        await update.effective_message.reply_text("<b>التقييم 6/8</b>\nأين تتمرن؟ البيت، النادي، الخارج، أو مكان آخر؟", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 9/11</b>\nوين بتتمرن؟ البيت، النادي، الخارج، أو مكان ثاني؟", parse_mode="HTML")
     elif state == "place":
         draft["training_place"] = text[:40]
         set_state(uid, "equipment")
-        await update.effective_message.reply_text("<b>التقييم 7/8</b>\nما المعدات المتوفرة؟ اكتبها أو أرسل: لا يوجد.", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 10/11</b>\nشو المعدات المتوفرة؟ اكتبها أو أرسل: لا يوجد.", parse_mode="HTML")
     elif state == "equipment":
         draft["equipment"] = text[:600]
         set_state(uid, "safety")
-        await update.effective_message.reply_text("<b>التقييم 8/8</b>\nهل لديك إصابة أو ألم أو تعليمات طبية تؤثر على التدريب؟ اكتب باختصار أو أرسل: لا يوجد.", parse_mode="HTML")
+        await update.effective_message.reply_text("<b>التقييم 11/11</b>\nهل عندك إصابة أو ألم أو تعليمات طبية بتأثر على التدريب؟ اكتب باختصار أو أرسل: لا يوجد.", parse_mode="HTML")
     elif state == "safety":
         draft["injury_note"] = "" if text in ("لا يوجد", "لا", "لاشيء", "none") else text[:800]
         draft["diet_preferences"] = ""
         set_state(uid, "confirm")
-        summary = "\n".join(f"• <b>{label}:</b> {esc(draft.get(key) or '—')}" for key, label in [("preferred_name", "الاسم"), ("goal", "الهدف"), ("experience", "الخبرة"), ("days_per_week", "الأيام"), ("session_minutes", "المدة"), ("training_place", "المكان"), ("equipment", "المعدات"), ("injury_note", "الإصابة/الألم")])
+        summary = "\n".join(f"• <b>{label}:</b> {esc(draft.get(key) or '—')}" for key, label in [("preferred_name", "الاسم"), ("goal", "الهدف"), ("experience", "الخبرة"), ("age", "العمر"), ("height_cm", "الطول سم"), ("weight_kg", "الوزن كغ"), ("days_per_week", "الأيام"), ("session_minutes", "المدة"), ("training_place", "المكان"), ("equipment", "المعدات"), ("injury_note", "الإصابة/الألم")])
         await update.effective_message.reply_text(f"<b>راجع معلوماتك قبل الحفظ</b>\n\n{summary}", parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("اعتماد وإنشاء الخطة ✅", callback_data="assessment_confirm")], [InlineKeyboardButton("إلغاء", callback_data="home")]]))
     elif state == "ask":
         await answer_coach(update, text)
@@ -218,13 +256,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def answer_coach(update: Update, text: str):
-    if not GROQ_API_KEY:
-        await update.effective_message.reply_text("أنا جاهز أساعدك، لكن خدمة المحادثة الذكية غير مفعّلة الآن. استخدم القائمة للتقييم والخطة وتسجيل التمرين.", reply_markup=back_menu(update.effective_user.id))
-        return
     profile = get_profile(update.effective_user.id) or {}
+    if not GROQ_API_KEY:
+        await update.effective_message.reply_text(local_coach_answer(text, profile), parse_mode="HTML", reply_markup=back_menu(update.effective_user.id))
+        return
     system = (
-        "أنت RASHED AI، كوتش لياقة عربي ودود. أنت ذكاء اصطناعي ولست طبيبًا أو مدربًا بشريًا. "
-        "أعط إرشادات عامة قصيرة مبنية على ملف المستخدم، لا تشخّص ولا تغيّر أدوية ولا تعد بنتائج. "
+        "أنت RASHED AI، كوتش لياقة وتغذية عربي محترف وودود. خاطب المستخدم بلهجة شامية خفيفة ومفهومة، كأنك كوتش حقيقي قريب منه وصديق داعم، لكن بدون ادعاء أنك إنسان. "
+        "ابدأ بجواب مباشر، ثم أعط خطوات عملية واضحة، واسأل سؤال متابعة واحدًا فقط إذا كانت البيانات ناقصة. اربط جوابك بملف المستخدم ولا تخترع بيانات. "
+        "أنت ذكاء اصطناعي ولست طبيبًا أو مدربًا بشريًا. لا تشخّص ولا تغيّر أدوية ولا تعد بنتائج. "
         "إذا ظهر ألم شديد أو أعراض مقلقة أو اضطراب أكل أو حالة طبية معقدة، أوقف التخصيص ووجّه لمختص. "
         f"ملف المستخدم: {profile}"
     )
@@ -236,7 +275,24 @@ async def answer_coach(update: Update, text: str):
         reply = await asyncio.to_thread(call)
         await update.effective_message.reply_text(esc(reply), parse_mode="HTML")
     except Exception:
-        await update.effective_message.reply_text("تعذر الاتصال بالكوتش الذكي الآن. أقدر أساعدك من خلال الخطة وتسجيل التمرين، أو جرّب بعد قليل.")
+        await update.effective_message.reply_text(local_coach_answer(text, profile), parse_mode="HTML", reply_markup=back_menu(update.effective_user.id))
+
+
+def local_coach_answer(text: str, profile: dict) -> str:
+    """Useful offline answers while the optional LLM provider is unavailable."""
+    question = text.lower()
+    name = esc(profile.get("preferred_name") or "يا بطل")
+    if any(word in question for word in ("بروتين", "protein")):
+        weight = profile.get("weight_kg")
+        target = f"تقريبًا {round(float(weight) * 1.4)}–{round(float(weight) * 2.0)} غ يوميًا" if weight else "غالبًا 1.4–2.0 غ لكل كغ من الوزن يوميًا"
+        return f"<b>{name}، جواب سريع:</b> البروتين بيساعدك تحافظ وتبني عضل، لكن الرقم مش سحري. نطاقك الإرشادي {target}. وزّعه على 3–4 وجبات، وخلي أغلبه من أكل عادي مثل البيض واللبن والدجاج والبقول. إذا عندك مرض كلوي أو حالة صحية، اسأل مختص قبل رفعه."
+    if any(word in question for word in ("تنحيف", "خسارة دهون", "اخسر وزن", "سعرات")):
+        return f"<b>{name}، خلّينا نعملها صح:</b> خفض الدهون يحتاج عجزًا بسيطًا ومستمرًا، مش تجويع. ابدأ بتقليل حصصك قليلًا، ثبّت البروتين، زِد خطواتك، وسجّل الوزن 3–4 مرات بالأسبوع وخذ المتوسط. إذا ما نزل المتوسط بعد 2–3 أسابيع، نعدّل خطوة صغيرة."
+    if any(word in question for word in ("تضخيم", "عضل", "بناء عضلات", "كتلة")):
+        return f"<b>{name}، لبناء العضلات:</b> تمرّن كل عضلة بانتظام، قرّب المجموعات من جهد صعب مع تقنية سليمة، وزِد تكرارًا أو وزنًا تدريجيًا. كل كفايتك من الأكل والنوم أهم من أي مكمل. لا نرفع الحجم إذا الأداء أو التعافي سيئ."
+    if any(word in question for word in ("ألم", "اصابة", "إصابة", "وجع")):
+        return f"<b>{name}، السلامة أولًا:</b> إذا الألم حاد أو يزيد أو معه خدر/ضعف/دوخة، أوقف التمرين وراجع مختصًا. إذا كان انزعاجًا غير معتاد، خفف الحمل ولا تحاول تشخيصه من البوت. احكيلي وين الألم ومتى يظهر إذا بدك توجيهًا عامًا فقط."
+    return f"<b>{name}، فهمت سؤالك.</b> أقدر أجاوبك عن التدريب، التغذية، النوم، وخطتك. جرّب تكتب سؤالك بشكل محدد مثل: «كيف أزيد البروتين؟» أو «كيف أعمل تقدّم في السكوات؟». ولإجابة أوسع على أي موضوع، فعّل مزود الذكاء الاصطناعي الاختياري في إعدادات الاستضافة؛ الخطة والتقييم يشتغلوا عندك بدونه."
 
 
 async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -249,7 +305,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "assessment":
         drafts[uid] = {"preferred_name": query.from_user.first_name or ""}
         set_state(uid, "name")
-        await query.edit_message_text("<b>التقييم 1/8</b>\nشو بتحب أناديك؟", parse_mode="HTML")
+        await query.edit_message_text("<b>التقييم 1/11</b>\nشو بتحب أناديك؟", parse_mode="HTML")
     elif data == "assessment_confirm":
         profile = drafts.get(uid, {})
         save_profile(uid, profile)

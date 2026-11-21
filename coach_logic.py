@@ -35,16 +35,32 @@ def starter_plan(profile: dict) -> dict:
     safety = "إذا ظهر ألم غير معتاد، أوقف التمرين."
     if injury:
         safety += " ذكرت وجود ملاحظة صحية؛ لا نعدّل حولها تشخيصيًا، ومن الأفضل مراجعة مختص قبل التحميل على المنطقة المتأثرة."
+    age = profile.get("age")
+    weight = profile.get("weight_kg")
+    height = profile.get("height_cm")
+    measurements = {}
+    if age:
+        measurements["age"] = age
+    if height:
+        measurements["height_cm"] = height
+    if weight:
+        measurements["weight_kg"] = weight
+    if age and int(age) < 18:
+        safety += " بما أن عمرك أقل من 18 سنة، خذ موافقة ولي الأمر واستعن بمدرب أو مختص مؤهل قبل رفع الشدة."
+    nutrition = [
+        "ضع مصدر بروتين في أغلب الوجبات، مع خضار أو فاكهة.",
+        "اشرب الماء بانتظام، ولا تحتاج إلى حمية قاسية كي تبدأ.",
+        "زد التكرارات أو الوزن تدريجيًا فقط إذا كان الأداء مريحًا وبدون ألم.",
+    ]
+    if weight:
+        nutrition.insert(1, f"نطاق بروتين إرشادي تقريبي: {round(float(weight) * 1.4)}–{round(float(weight) * 2.0)} غرام يوميًا؛ عدّله مع مختص حسب صحتك وهدفك.")
     return {
         "title": f"خطة {days} أيام — بداية ذكية",
-        "summary": "خطة عامة قابلة للتعديل حسب هدفك ووقتك ومعداتك، وليست وصفة طبية أو ضمانًا للنتيجة.",
+        "summary": "خطة مبدئية مبنية على ملفك وقياساتك، وليست تشخيصًا طبيًا أو ضمانًا للنتيجة. نراجعها مع بيانات التقدم.",
         "safety": safety,
+        "measurements": measurements,
         "days": plan_days,
-        "nutrition": [
-            "ضع مصدر بروتين في أغلب الوجبات، مع خضار أو فاكهة.",
-            "اشرب الماء بانتظام، ولا تحتاج إلى حمية قاسية كي تبدأ.",
-            "زد التكرارات أو الوزن تدريجيًا فقط إذا كان الأداء مريحًا وبدون ألم.",
-        ],
+        "nutrition": nutrition,
     }
 
 
@@ -68,6 +84,7 @@ def format_plan(plan: dict) -> str:
 def format_profile(profile: dict) -> str:
     labels = {
         "preferred_name": "الاسم المفضّل", "goal": "الهدف", "experience": "الخبرة",
+        "age": "العمر", "height_cm": "الطول", "weight_kg": "الوزن",
         "days_per_week": "أيام التدريب", "session_minutes": "مدة الحصة", "training_place": "مكان التدريب",
         "equipment": "المعدات", "injury_note": "ملاحظة صحية", "diet_preferences": "التفضيلات الغذائية",
     }
@@ -76,6 +93,8 @@ def format_profile(profile: dict) -> str:
         value = profile.get(key) or "غير محدد"
         if key == "days_per_week" and value != "غير محدد": value = f"{value} أيام"
         if key == "session_minutes" and value != "غير محدد": value = f"{value} دقيقة"
+        if key == "height_cm" and value != "غير محدد": value = f"{value} سم"
+        if key == "weight_kg" and value != "غير محدد": value = f"{value} كغ"
         lines.append(f"<b>{label}:</b> {escape(str(value))}")
     lines.append("\n<i>يمكنك طلب تعديل ملفك أو حذفه في أي وقت.</i>")
     return "\n".join(lines)

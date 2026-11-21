@@ -42,6 +42,9 @@ def init_db() -> None:
                 preferred_name TEXT NOT NULL DEFAULT '',
                 goal TEXT NOT NULL DEFAULT '',
                 experience TEXT NOT NULL DEFAULT '',
+                age INTEGER,
+                height_cm REAL,
+                weight_kg REAL,
                 days_per_week INTEGER,
                 session_minutes INTEGER,
                 training_place TEXT NOT NULL DEFAULT '',
@@ -71,6 +74,11 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(telegram_id, workout_date DESC);
             """
         )
+        # Safe migration for databases created by the first MVP release.
+        columns = {row[1] for row in db.execute("PRAGMA table_info(profiles)").fetchall()}
+        for name, definition in (("age", "INTEGER"), ("height_cm", "REAL"), ("weight_kg", "REAL")):
+            if name not in columns:
+                db.execute(f"ALTER TABLE profiles ADD COLUMN {name} {definition}")
 
 
 def register_user(user: Any) -> None:
@@ -99,16 +107,18 @@ def get_state(telegram_id: int) -> str:
 def save_profile(telegram_id: int, data: dict[str, Any]) -> None:
     with _LOCK, connect() as db:
         db.execute(
-            """INSERT INTO profiles(telegram_id, preferred_name, goal, experience, days_per_week, session_minutes,
+            """INSERT INTO profiles(telegram_id, preferred_name, goal, experience, age, height_cm, weight_kg, days_per_week, session_minutes,
                training_place, equipment, injury_note, diet_preferences, privacy_consent_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(telegram_id) DO UPDATE SET preferred_name=excluded.preferred_name, goal=excluded.goal, experience=excluded.experience,
+               age=excluded.age, height_cm=excluded.height_cm, weight_kg=excluded.weight_kg,
                days_per_week=excluded.days_per_week, session_minutes=excluded.session_minutes,
                training_place=excluded.training_place, equipment=excluded.equipment,
                injury_note=excluded.injury_note, diet_preferences=excluded.diet_preferences,
                privacy_consent_at=excluded.privacy_consent_at, updated_at=excluded.updated_at""",
             (
-                telegram_id, data.get("preferred_name", ""), data.get("goal", ""), data.get("experience", ""), data.get("days_per_week"),
+                telegram_id, data.get("preferred_name", ""), data.get("goal", ""), data.get("experience", ""),
+                data.get("age"), data.get("height_cm"), data.get("weight_kg"), data.get("days_per_week"),
                 data.get("session_minutes"), data.get("training_place", ""), data.get("equipment", ""),
                 data.get("injury_note", ""), data.get("diet_preferences", ""), _now(), _now(),
             ),
